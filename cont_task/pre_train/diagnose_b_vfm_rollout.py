@@ -12,7 +12,7 @@ import torch
 from src.crystalite.vfm_utils import linear_interpolant, torus_delta
 from src.data.mp20_tokens import MP20Tokens, VZ
 from src.eval_crystalite_ckpt import _apply_ema_state_dict, _build_model_from_ckpt, _load_checkpoint
-from src.models.lattice_repr import y1_to_lattice_latent
+from src.models.lattice_repr import ltri_params_to_lattice_matrix, y1_to_lattice_latent
 from src.models.type_encoding import build_type_encoding
 
 
@@ -23,6 +23,15 @@ def volume(ltri: torch.Tensor) -> torch.Tensor:
 def summarize(x: torch.Tensor) -> dict[str, float]:
     x = x.detach().float().cpu().numpy()
     return {"mean": float(x.mean()), "median": float(np.median(x)), "min": float(x.min()), "max": float(x.max())}
+
+
+def minimum_distance(frac: torch.Tensor, ltri: torch.Tensor, pad: torch.Tensor) -> torch.Tensor:
+    delta = frac[:, :, None] - frac[:, None, :]
+    delta = torch.remainder(delta + 0.5, 1.0) - 0.5
+    distance = torch.linalg.vector_norm(delta @ ltri_params_to_lattice_matrix(ltri)[:, None], dim=-1)
+    valid = (~pad)[:, :, None] & (~pad)[:, None, :]
+    valid &= ~torch.eye(frac.shape[1], device=frac.device, dtype=torch.bool)[None]
+    return distance.masked_fill(~valid, torch.inf).amin((1, 2))
 
 
 def main() -> None:
@@ -54,7 +63,12 @@ def main() -> None:
     prior_frac = torch.remainder(torch.randn(clean_frac.shape, device=device, generator=gen), 1.0)
     prior_lattice = torch.randn(clean_lattice.shape, device=device, generator=gen)
 
-    report: dict[str, object] = {"clean_volume": summarize(volume(clean_lattice)), "teacher": {}, "rollout": {}}
+    report: dict[str, object] = {
+        "clean_volume": summarize(volume(clean_lattice)),
+        "clean_minimum_distance_A": summarize(minimum_distance(clean_frac, clean_lattice, pad)),
+        "teacher": {},
+        "rollout": {},
+    }
     with torch.inference_mode():
         for value in (0.0, 0.1, 0.5, 0.9, 0.99):
             t = torch.full((len(items),), value, device=device)
@@ -65,6 +79,9 @@ def main() -> None:
                 "predicted_volume": summarize(volume(pred["lattice_vel"])),
                 "lattice_endpoint_mae": float((pred["lattice_vel"] - clean_lattice).abs().mean()),
                 "coordinate_endpoint_mae": float(torus_delta(pred["coord_vel"], clean_frac).abs()[~pad].mean()),
+                "predicted_endpoint_minimum_distance_A": summarize(
+                    minimum_distance(pred["coord_vel"], pred["lattice_vel"], pad)
+                ),
             }
 
         x, lat = prior_frac.clone(), prior_lattice.clone()
@@ -79,6 +96,10 @@ def main() -> None:
                     "state_volume": summarize(volume(lat)),
                     "predicted_endpoint_volume": summarize(volume(pred["lattice_vel"])),
                     "predicted_lattice_vs_clean_mae": float((pred["lattice_vel"] - clean_lattice).abs().mean()),
+                    "state_minimum_distance_A": summarize(minimum_distance(x, lat, pad)),
+                    "predicted_endpoint_minimum_distance_A": summarize(
+                        minimum_distance(pred["coord_vel"], pred["lattice_vel"], pad)
+                    ),
                 }
             dt = 1.0 / args.steps
             remaining = max(1.0 - value, dt)
