@@ -108,10 +108,16 @@ Already usable for the BMS mainline:
 - Cartesian-force to fractional-gradient conversion;
 - translation zero-mode projection.
 
+Implemented and verified:
+
+- exact analytic chain rule from a physical cell-matrix gradient to the six
+  Crystalite `ltri` parameters in `post_train/common/geometry.py`;
+- agreement with decoder autograd and central finite differences on a
+  non-orthogonal cell (`post_train/common/test_geometry.py`).
+
 Still required:
 
 1. checkpoint-preserving BMS adapter and reward-gradient finite-difference tests;
-2. exact `ltri` cell-gradient adapter and finite-difference test;
-3. PCE adapter tied to the existing EDM transition implementation;
-4. regression tests proving the PCE base process is unchanged;
-5. energy invariance tests for periodic-equivalent coordinates.
+2. PCE adapter tied to the existing EDM transition implementation;
+3. regression tests proving the PCE base process is unchanged;
+4. energy invariance tests for periodic-equivalent coordinates.
