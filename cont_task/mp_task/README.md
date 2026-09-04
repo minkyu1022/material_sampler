@@ -29,3 +29,8 @@ Before training, audit the six-DOF cell measure/Jacobian, Cartesian-force to
 fractional-score conversion, stress to cell-score conversion, temperature
 distribution, and UMA model/version consistency.
 
+Bootstrap the public MP20 data and CSP checkpoint with:
+
+```bash
+bash cont_task/mp_task/scripts/bootstrap_mp20.sh
+```
