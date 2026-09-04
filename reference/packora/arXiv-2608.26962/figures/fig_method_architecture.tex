@@ -1,0 +1,436 @@
+% % Final crystal structure generator architecture.
+% % Figure-local palette matches the architecture-ablation diagram.
+% \definecolor{methodArchInputBg}{HTML}{E9F0F5}
+% \definecolor{methodArchInputBlock}{HTML}{AFC9DA}
+% \definecolor{methodArchInputLine}{HTML}{5D8198}
+% \definecolor{methodArchTimeBg}{HTML}{FCF5E6}
+% \definecolor{methodArchTimeBlock}{HTML}{F6DFB1}
+% \definecolor{methodArchTimeLine}{HTML}{B7892D}
+% \definecolor{methodArchPairBg}{HTML}{E3EEE9}
+% \definecolor{methodArchPairBlock}{HTML}{C5DED1}
+% \definecolor{methodArchPairLine}{HTML}{5F8D7A}
+% \definecolor{methodArchTrunkBg}{HTML}{E7DCE3}
+% \definecolor{methodArchHeadBg}{HTML}{F8EBE9}
+% \definecolor{methodArchAttnBlock}{HTML}{EAC8B1}
+% \definecolor{methodArchMlpBlock}{HTML}{CDB6C5}
+% \definecolor{methodArchArrow}{HTML}{2D2D2D}
+% \definecolor{methodArchFrame}{HTML}{30343B}
+
+% \begin{figure}[t]
+%   \centering
+%   \resizebox{\textwidth}{!}{%
+%   \begin{tikzpicture}[
+%     font=\scriptsize,
+%     >={Stealth[length=1.5mm]},
+%     box/.style={draw, rounded corners=1.3pt, align=center, minimum height=6mm,
+%                 inner sep=1.6pt, font=\scriptsize},
+%     emb/.style={box, draw=methodArchInputLine, fill=methodArchInputBlock,
+%                 minimum width=15mm},
+%     norm/.style={box, draw=methodArchFrame, fill=methodArchPairBlock,
+%                  minimum width=7mm},
+%     sca/.style={box, draw=methodArchTimeLine, fill=methodArchTimeBlock,
+%                 minimum width=8mm},
+%     attn/.style={box, draw=methodArchFrame, fill=methodArchAttnBlock,
+%                  minimum width=13mm},
+%     mlp/.style={box, draw=methodArchFrame, fill=methodArchMlpBlock,
+%                 minimum width=12mm},
+%     tri/.style={box, draw=methodArchPairLine, fill=methodArchPairBlock,
+%                 minimum width=13mm},
+%     head/.style={box, draw=methodArchFrame, fill=methodArchAttnBlock,
+%                  minimum width=14mm},
+%     time/.style={box, draw=methodArchTimeLine, fill=methodArchTimeBlock,
+%                  minimum width=15mm},
+%     sum/.style={draw, circle, inner sep=0pt, minimum size=3.2mm, font=\tiny},
+%     flow/.style={->, draw=methodArchArrow, line width=0.45pt},
+%     wire/.style={draw=methodArchArrow, line width=0.45pt},
+%     region/.style={rounded corners=4pt, draw, inner sep=5pt},
+%     title/.style={font=\bfseries\footnotesize},
+%   ]
+%     % Condition-only input representations
+%     \node[emb] (singlecond) {SingleCond};
+%     \node[emb, below=13mm of singlecond] (paircond) {PairCond};
+%     \node[left=4mm of singlecond, font=\small] (condition) {$\mathcal{C}$};
+%     \draw[flow] (condition) -- (singlecond.west);
+%     \draw[flow] (condition.south) |- (paircond.west);
+%     \coordinate (singlebranch) at ([xshift=2.2mm]singlecond.east);
+%     \node[circle, fill=methodArchArrow, inner sep=0pt, minimum size=1.2pt]
+%       at (singlebranch) {};
+%     \draw[flow] (singlebranch) |- ([yshift=3mm]paircond.north) -- (paircond.north);
+%     \begin{scope}[on background layer]
+%       \node[region, draw=methodArchInputLine, fill=methodArchInputBg,
+%             fit=(singlecond)(paircond)] (conditionbg) {};
+%     \end{scope}
+%     \node[title, above=0.3mm of conditionbg.north] {Condition Embedder};
+
+%     % Pair-only Pairmixer
+%     \node[tri, right=6mm of paircond] (triout) {TriMulOut};
+%     \node[sum, right=1.8mm of triout] (pairaddone) {$+$};
+%     \node[tri, right=1.8mm of pairaddone] (triin) {TriMulIn};
+%     \node[sum, right=1.8mm of triin] (pairaddtwo) {$+$};
+%     \node[mlp, right=1.8mm of pairaddtwo] (transition) {Transition};
+%     \node[sum, right=1.8mm of transition] (pairaddthree) {$+$};
+%     \draw[flow] (paircond.east) -- (triout.west)
+%       node[midway, above, font=\tiny] {$\mathbf{P}$};
+%     \draw[flow] (triout) -- (pairaddone);
+%     \draw[flow] (pairaddone) -- (triin);
+%     \draw[flow] (triin) -- (pairaddtwo);
+%     \draw[flow] (pairaddtwo) -- (transition);
+%     \draw[flow] (transition) -- (pairaddthree);
+%     \draw[flow] ([xshift=-2mm]triout.west) -- ++(0,-3.2mm)
+%       -| (pairaddone.south);
+%     \draw[flow] ([xshift=-1.6mm]triin.west) -- ++(0,-3.2mm)
+%       -| (pairaddtwo.south);
+%     \draw[flow] ([xshift=-1.6mm]transition.west) -- ++(0,-3.2mm)
+%       -| (pairaddthree.south);
+%     \coordinate (pairbottom) at ([yshift=-4.5mm]pairaddtwo.south);
+%     \begin{scope}[on background layer]
+%       \node[region, draw=methodArchPairLine, fill=methodArchPairBg,
+%             fit=(triout)(pairaddthree)(pairbottom)] (pairbg) {};
+%     \end{scope}
+%     \node[title, above=0.3mm of pairbg.north] {Pairmixer ($\times 4$)};
+
+%     % Noisy state enters only after Pairmixer
+%     \node[sum] (singleadd) at
+%       ([xshift=25mm]pairaddthree.east |- singlecond) {$+$};
+%     \node[emb, above=3mm of singleadd] (coordembed) {Coord};
+%     \node[emb, below=3mm of singleadd] (latticeembed) {Lattice};
+%     \node[left=3mm of coordembed, font=\small] (coordinput) {$\mathbf{X}_t$};
+%     \node[left=3mm of latticeembed, font=\small] (latticeinput)
+%       {$\boldsymbol{\ell}_t$};
+%     \draw[flow] (coordinput) -- (coordembed);
+%     \draw[flow] (latticeinput) -- (latticeembed);
+%     \draw[flow] (coordembed.south) -- (singleadd.north);
+%     \draw[flow] (latticeembed.north) -- (singleadd.south);
+%     \draw[flow] (singlecond.east) -- (singleadd.west)
+%       node[pos=0.55, above, font=\tiny] {$\mathbf{S}$};
+%     \begin{scope}[on background layer]
+%       \node[region, draw=methodArchInputLine, fill=methodArchInputBg,
+%             fit=(coordembed)(latticeembed)(singleadd)] (noisybg) {};
+%     \end{scope}
+%     \node[title, above=0.3mm of noisybg.north] {Noisy-State Embedder};
+
+%     % DiT trunk
+%     \coordinate (trunkstart) at ([xshift=13mm]singleadd.east);
+%     \node[norm, anchor=west] (normone) at (trunkstart) {LN};
+%     \node[sca, right=1.6mm of normone] (shiftone) {Scale\\Shift};
+%     \node[attn, right=1.6mm of shiftone] (attention) {Attention};
+%     \node[sca, right=1.6mm of attention] (gateone) {Scale};
+%     \node[sum, right=1.6mm of gateone] (singleaddone) {$+$};
+%     \node[norm, right=2.4mm of singleaddone] (normtwo) {LN};
+%     \node[sca, right=1.6mm of normtwo] (shifttwo) {Scale\\Shift};
+%     \node[mlp, right=1.6mm of shifttwo] (feedforward) {MLP};
+%     \node[sca, right=1.6mm of feedforward] (gatetwo) {Scale};
+%     \node[sum, right=1.6mm of gatetwo] (singleaddtwo) {$+$};
+%     \draw[flow] (singleadd) -- (normone.west)
+%       node[pos=0.52, above, font=\tiny] {$\widetilde{\mathbf{S}}$};
+%     \draw[flow] (normone) -- (shiftone);
+%     \draw[flow] (shiftone) -- (attention);
+%     \draw[flow] (attention) -- (gateone);
+%     \draw[flow] (gateone) -- (singleaddone);
+%     \draw[flow] (singleaddone) -- (normtwo);
+%     \draw[flow] (normtwo) -- (shifttwo);
+%     \draw[flow] (shifttwo) -- (feedforward);
+%     \draw[flow] (feedforward) -- (gatetwo);
+%     \draw[flow] (gatetwo) -- (singleaddtwo);
+%     \coordinate (skipone) at ([xshift=-1mm]normone.west);
+%     \coordinate (skiptwo) at ($(singleaddone.east)!0.45!(normtwo.west)$);
+%     \draw[flow] (skipone) -- ++(0,5mm) -| (singleaddone.north);
+%     \draw[flow] (skiptwo) -- ++(0,6.3mm) -| (singleaddtwo.north);
+%     \draw[flow] (pairaddthree.east) -| (attention.south)
+%       node[pos=0.28, below, font=\tiny] {pair bias $\mathbf{P}^{\star}$};
+
+%     \node[sca, minimum width=16mm, below=9mm of singleaddone]
+%       (modulation) {Modulation};
+%     \coordinate (modulationbus) at ($(modulation.north)+(0,4mm)$);
+%     \draw[wire] (modulation.north) -- (modulationbus);
+%     \foreach \target in {shiftone,gateone,shifttwo,gatetwo} {
+%       \draw[flow] (modulationbus) -| (\target.south);
+%     }
+%     \begin{scope}[on background layer]
+%       \node[region, draw=methodArchFrame, fill=methodArchTrunkBg,
+%             fit=(normone)(singleaddtwo)(modulation)] (trunkbg) {};
+%     \end{scope}
+%     \node[title, above=0.3mm of trunkbg.north] {DiT Trunk ($\times 16$)};
+
+%     % Time modulation
+%     \node[time] (timeembed) at ([yshift=-13mm]noisybg.south)
+%       {SinuEmb $\to$ MLP};
+%     \node[left=4mm of timeembed, font=\small] (timeinput) {$t$};
+%     \draw[flow] (timeinput) -- (timeembed);
+%     \draw[flow] (timeembed.east) -| (modulation.south)
+%       node[pos=0.22, above, font=\tiny] {$c_t$};
+%     \begin{scope}[on background layer]
+%       \node[region, draw=methodArchTimeLine, fill=methodArchTimeBg,
+%             fit=(timeembed)] (timebg) {};
+%     \end{scope}
+%     \node[title, above=0.3mm of timebg.north] {Time Embedder};
+
+%     % Coordinate and lattice endpoint heads
+%     \node[head] (coordhead) at ($(singleaddtwo.east)+(15mm,4mm)$)
+%       {CoordHead};
+%     \node[head, below=2.5mm of coordhead] (latticehead) {LatticeHead};
+%     \draw[flow] (singleaddtwo) -- ($(singleaddtwo.east)+(7mm,0)$)
+%       coordinate (headbranch);
+%     \draw[flow] (headbranch) |- (coordhead.west);
+%     \draw[flow] (headbranch) |- (latticehead.west);
+%     \node[right=4mm of coordhead, font=\small] (coordoutput)
+%       {$\widehat{\mathbf{X}}_1$};
+%     \node[right=4mm of latticehead, font=\small] (latticeoutput)
+%       {$\widehat{\boldsymbol{\ell}}_1$};
+%     \draw[flow] (coordhead) -- (coordoutput);
+%     \draw[flow] (latticehead) -- (latticeoutput);
+%     \begin{scope}[on background layer]
+%       \node[region, draw=methodArchFrame, fill=methodArchHeadBg,
+%             fit=(coordhead)(latticehead)] (headbg) {};
+%     \end{scope}
+%     \node[title, above=0.3mm of headbg.north] {Endpoint Heads};
+%   \end{tikzpicture}%
+%   }
+%   \caption{\textbf{Final crystal structure generator architecture.}
+%   The condition initializes single and pair representations $\mathbf{S}$ and
+%   $\mathbf{P}$. Four Pairmixer blocks update only $\mathbf{P}$ using outgoing and
+%   incoming triangle multiplication followed by a transition; $\mathbf{S}$ bypasses
+%   Pairmixer unchanged. Embeddings of the noisy coordinates $\mathbf{X}_t$ and
+%   lattice latent $\boldsymbol{\ell}_t$ are added to the single track only after
+%   Pairmixer. The refined condition-only pair track $\mathbf{P}^{\star}$ biases each
+%   DiT attention layer, while the time embedding modulates the trunk. Separate heads
+%   predict $\widehat{\mathbf{X}}_1$ and $\widehat{\boldsymbol{\ell}}_1$. The final
+%   configuration contains neither a geometry embedding module nor single-track
+%   Pairmixer updates.}
+%   \label{fig:method-architecture}
+% \end{figure}
+
+% Final crystal structure generator architecture.
+% Figure-local palette matches the architecture-ablation diagram.
+\definecolor{methodArchInputBg}{HTML}{E9F0F5}
+\definecolor{methodArchInputBlock}{HTML}{AFC9DA}
+\definecolor{methodArchInputLine}{HTML}{5D8198}
+\definecolor{methodArchTimeBg}{HTML}{FCF5E6}
+\definecolor{methodArchTimeBlock}{HTML}{F6DFB1}
+\definecolor{methodArchTimeLine}{HTML}{B7892D}
+\definecolor{methodArchPairBg}{HTML}{E3EEE9}
+\definecolor{methodArchPairBlock}{HTML}{C5DED1}
+\definecolor{methodArchPairLine}{HTML}{5F8D7A}
+\definecolor{methodArchTrunkBg}{HTML}{E7DCE3}
+\definecolor{methodArchHeadBg}{HTML}{F8EBE9}
+\definecolor{methodArchAttnBlock}{HTML}{EAC8B1}
+\definecolor{methodArchMlpBlock}{HTML}{CDB6C5}
+\definecolor{methodArchArrow}{HTML}{2D2D2D}
+\definecolor{methodArchFrame}{HTML}{30343B}
+
+\begin{figure}[t]
+  \centering
+  \resizebox{\textwidth}{!}{%
+  \begin{tikzpicture}[
+    font=\scriptsize,
+    >={Stealth[length=1.5mm]},
+    box/.style={draw, rounded corners=1.3pt, align=center, minimum height=6mm,
+                inner sep=1.6pt, font=\scriptsize},
+    emb/.style={box, draw=methodArchInputLine, fill=methodArchInputBlock,
+                minimum width=15mm},
+    norm/.style={box, draw=methodArchFrame, fill=methodArchPairBlock,
+                 minimum width=7mm},
+    sca/.style={box, draw=methodArchTimeLine, fill=methodArchTimeBlock,
+                minimum width=8mm},
+    attn/.style={box, draw=methodArchFrame, fill=methodArchAttnBlock,
+                 minimum width=13mm},
+    mlp/.style={box, draw=methodArchFrame, fill=methodArchMlpBlock,
+                minimum width=12mm},
+    tri/.style={box, draw=methodArchPairLine, fill=methodArchPairBlock,
+                minimum width=13mm},
+    head/.style={box, draw=methodArchFrame, fill=methodArchAttnBlock,
+                 minimum width=14mm},
+    time/.style={box, draw=methodArchTimeLine, fill=methodArchTimeBlock,
+                 minimum width=15mm},
+    sum/.style={draw, circle, inner sep=0pt, minimum size=3.2mm,
+                font=\scriptsize},
+    flow/.style={->, draw=methodArchArrow, line width=0.45pt},
+    wire/.style={draw=methodArchArrow, line width=0.45pt},
+    bdot/.style={circle, fill=methodArchArrow, inner sep=0pt,
+                 minimum size=2.2pt},
+    region/.style={rounded corners=4pt, draw, inner sep=5pt},
+    title/.style={font=\bfseries\footnotesize},
+  ]
+    % Condition-only input representations
+    \node[emb] (singlecond) {SingleCond};
+    \node[emb, below=17mm of singlecond] (paircond) {PairCond};
+    \coordinate (inputcolumn) at ([xshift=-17mm]singlecond);
+    \node[font=\small, text=methodArchFrame, inner sep=1pt]
+      (condition) at (inputcolumn |- singlecond) {$\mathcal{C}$};
+    \coordinate (conditionbranch) at ([xshift=-3mm]singlecond.west);
+    \node[bdot] at (conditionbranch) {};
+    \draw[wire] (condition) -- (conditionbranch);
+    \draw[flow] (conditionbranch) -- (singlecond.west);
+    \draw[flow] (conditionbranch) |- (paircond.west);
+    \coordinate (singlebranch) at ([xshift=3mm]singlecond.east);
+    \coordinate (pairtop) at ([yshift=3.5mm]paircond.north);
+    \coordinate (pairbend) at (singlebranch |- pairtop);
+    \node[bdot] at (singlebranch) {};
+    \draw[flow] (singlebranch) -- (pairbend) -- (pairtop) -- (paircond.north);
+    \coordinate (inputtop) at ([yshift=2mm]singlecond.north);
+    \begin{scope}[on background layer]
+      \node[region, draw=methodArchInputLine, fill=methodArchInputBg,
+            fit=(inputtop)(conditionbranch)(singlecond)(paircond)(singlebranch)
+                (pairbend)(pairtop)] (conditionbg) {};
+    \end{scope}
+    \node[title, above=0.7mm of conditionbg.north] (conditiontitle)
+      {Input Embedder};
+
+    % Pair-only Pairmixer
+    \node[tri, right=20mm of paircond] (triout) {TriMulOut};
+    \node[sum, right=2.6mm of triout] (pairaddone) {$+$};
+    \node[tri, right=3mm of pairaddone] (triin) {TriMulIn};
+    \node[sum, right=2.6mm of triin] (pairaddtwo) {$+$};
+    \node[mlp, right=3mm of pairaddtwo] (transition) {Transition};
+    \node[sum, right=2.6mm of transition] (pairaddthree) {$+$};
+    \draw[flow] (paircond.east) -- (triout.west);
+    \draw[flow] (triout) -- (pairaddone);
+    \draw[flow] (pairaddone) -- (triin);
+    \draw[flow] (triin) -- (pairaddtwo);
+    \draw[flow] (pairaddtwo) -- (transition);
+    \draw[flow] (transition) -- (pairaddthree);
+    \coordinate (pairresone) at ([xshift=-4mm]triout.west);
+    \coordinate (pairrestwo) at ([xshift=-1.5mm]triin.west);
+    \coordinate (pairresthree) at ([xshift=-1.5mm]transition.west);
+    \foreach \point in {pairresone,pairrestwo,pairresthree} {
+      \node[bdot] at (\point) {};
+    }
+    \draw[flow] (pairresone) -- ++(0,-5.5mm) -| (pairaddone.south);
+    \draw[flow] (pairrestwo) -- ++(0,-5.5mm) -| (pairaddtwo.south);
+    \draw[flow] (pairresthree) -- ++(0,-5.5mm) -| (pairaddthree.south);
+    \coordinate (pairtopbound) at ([yshift=2mm]triout.north);
+    \coordinate (pairbottom) at ([yshift=-7mm]triout.south);
+    \begin{scope}[on background layer]
+      \node[region, draw=methodArchPairLine, fill=methodArchPairBg,
+            fit=(pairresone)(triout)(pairaddthree)(pairtopbound)(pairbottom)]
+            (pairbg) {};
+    \end{scope}
+    \node[title, above=0.7mm of pairbg.north] (pairtitle)
+      {Pairmixer ($\times 4$)};
+
+    % Noisy state enters only after Pairmixer
+    \node[sum] (singleadd) at
+      ([xshift=24mm]pairaddthree.east |- singlecond) {$+$};
+    \node[emb, above=3mm of singleadd] (coordembed) {Coord};
+    \node[emb, below=3mm of singleadd] (latticeembed) {Lattice};
+    \node[left=4mm of coordembed, font=\small, text=methodArchFrame,
+          inner sep=1pt] (coordinput) {$\mathbf{X}_t$};
+    \node[left=4mm of latticeembed, font=\small, text=methodArchFrame,
+          inner sep=1pt] (latticeinput) {$\boldsymbol{\ell}_t$};
+    \draw[flow] (coordinput) -- (coordembed);
+    \draw[flow] (latticeinput) -- (latticeembed);
+    \draw[flow] (coordembed.south) -- (singleadd.north);
+    \draw[flow] (latticeembed.north) -- (singleadd.south);
+    \draw[flow] (singlecond.east) -- (singleadd.west);
+    \begin{scope}[on background layer]
+      \node[region, draw=methodArchInputLine, fill=methodArchInputBg,
+            fit=(coordembed)(latticeembed)(singleadd)] (noisybg) {};
+    \end{scope}
+    \node[title, above=0.7mm of noisybg.north] (noisytitle)
+      {Noisy Input Embedder};
+
+    % Time-conditioned DiT trunk
+    \coordinate (trunkstart) at ([xshift=16mm]coordembed.east |- singlecond);
+    \node[norm, anchor=west] (normone) at (trunkstart) {LN};
+    \node[sca, right=1.6mm of normone] (shiftone) {Scale\\Shift};
+    \node[attn, right=1.6mm of shiftone] (attention) {Attention};
+    \node[sca, right=1.6mm of attention] (gateone) {Scale};
+    \node[sum, right=1.6mm of gateone] (singleaddone) {$+$};
+    \node[norm, right=3mm of singleaddone] (normtwo) {LN};
+    \node[sca, right=1.6mm of normtwo] (shifttwo) {Scale\\Shift};
+    \node[mlp, right=1.6mm of shifttwo] (feedforward) {MLP};
+    \node[sca, right=1.6mm of feedforward] (gatetwo) {Scale};
+    \node[sum, right=1.6mm of gatetwo] (singleaddtwo) {$+$};
+    \draw[flow] (singleadd) -- (normone.west);
+    \draw[flow] (normone) -- (shiftone);
+    \draw[flow] (shiftone) -- (attention);
+    \draw[flow] (attention) -- (gateone);
+    \draw[flow] (gateone) -- (singleaddone);
+    \draw[flow] (singleaddone) -- (normtwo);
+    \draw[flow] (normtwo) -- (shifttwo);
+    \draw[flow] (shifttwo) -- (feedforward);
+    \draw[flow] (feedforward) -- (gatetwo);
+    \draw[flow] (gatetwo) -- (singleaddtwo);
+    \coordinate (skipone) at ([xshift=-4.5mm]normone.west);
+    \coordinate (skiptwo) at ([xshift=-1.5mm]normtwo.west);
+    \node[bdot] at (skipone) {};
+    \node[bdot] at (skiptwo) {};
+    \draw[flow] (skipone) -- ++(0,5.5mm) -| (singleaddone.north);
+    \draw[flow] (skiptwo) -- ++(0,5.5mm) -| (singleaddtwo.north);
+    \draw[flow] (pairaddthree.east) -| (attention.south);
+
+    \node[sca, minimum width=16mm, below=8mm of singleaddone]
+      (modulation) {Modulation};
+    \coordinate (modulationbus) at ($(modulation.north)+(0,2.5mm)$);
+    \draw[wire] (modulation.north) -- (modulationbus);
+    \node[bdot] at (modulationbus) {};
+    \foreach \target in {shiftone,gateone,shifttwo,gatetwo} {
+      \draw[flow] (modulationbus) -| (\target.south);
+    }
+    \coordinate (trunktop) at ([yshift=7mm]normone.north);
+    \coordinate (trunkleft) at ([xshift=-1.5mm]skipone);
+    \coordinate (trunkbottom) at ([yshift=-2.5mm]modulation.south);
+    \begin{scope}[on background layer]
+      \node[region, draw=methodArchFrame, fill=methodArchTrunkBg,
+            fit=(normone)(singleaddtwo)(modulation)(trunktop)(trunkleft)
+                (trunkbottom)] (trunkbg) {};
+    \end{scope}
+    \node[title, above=0.7mm of trunkbg.north] (trunktitle)
+      {Transformer Trunk ($\times 16$)};
+
+    % Time Embedder below the Input Embedder, as in Figure 8(b)
+    \node[time] (timeembed) at ([yshift=-13.5mm]conditionbg.south)
+      {SinuEmb $\to$ MLP};
+    \node[font=\small, text=methodArchFrame, inner sep=1pt]
+      (timeinput) at (inputcolumn |- timeembed) {$t$};
+    \draw[flow] (timeinput) -- (timeembed);
+    \draw[flow] (timeembed.east) -| (modulation.south);
+    \begin{scope}[on background layer]
+      \node[region, draw=methodArchTimeLine, fill=methodArchTimeBg,
+            fit=(timeembed)] (timebg) {};
+    \end{scope}
+    \node[title, above=0.7mm of timebg.north] (timetitle) {Time Embedder};
+
+    % Coordinate and lattice endpoint heads
+    \node[head] (coordhead) at ($(singleaddtwo.east)+(18mm,5mm)$)
+      {CoordHead};
+    \node[head, below=3.4mm of coordhead] (latticehead) {LatticeHead};
+    \draw[wire] (singleaddtwo) -- ($(singleaddtwo.east)+(7mm,0)$)
+      coordinate (headbranch);
+    \node[bdot] at (headbranch) {};
+    \draw[flow] (headbranch) |- (coordhead.west);
+    \draw[flow] (headbranch) |- (latticehead.west);
+    \node[right=4mm of coordhead, font=\small] (coordoutput)
+      {$\widehat{\mathbf{X}}_1$};
+    \node[right=4mm of latticehead, font=\small] (latticeoutput)
+      {$\widehat{\boldsymbol{\ell}}_1$};
+    \draw[flow] (coordhead) -- (coordoutput);
+    \draw[flow] (latticehead) -- (latticeoutput);
+    \begin{scope}[on background layer]
+      \node[region, draw=methodArchFrame, fill=methodArchHeadBg,
+            fit=(headbranch)(coordhead)(latticehead)] (headbg) {};
+    \end{scope}
+    \node[title, above=0.7mm of headbg.north] (headtitle) {Crystal Heads};
+
+    % Complete denoiser frame
+    \begin{scope}[on background layer]
+      \node[region, draw=methodArchFrame, fill=none, inner sep=7pt,
+            fit=(conditionbg)(conditiontitle)(pairbg)(pairtitle)
+                (noisybg)(noisytitle)(trunkbg)(trunktitle)
+                (headbg)(headtitle)(timebg)(timetitle)
+                (condition)(timeinput)(coordoutput)] (denoiserbg) {};
+    \end{scope}
+  \end{tikzpicture}%
+  }
+    \caption{\textbf{Model architecture of \model{}.}
+    The condition $\mathcal{C}$ is embedded into single and pair representations,
+    with the pair representation refined by four \textsc{Pairmixer}
+    blocks~\citep{ouyangzhang2025triangle}. Because this computation depends only on
+    $\mathcal{C}$, it can be cached across denoising steps. Noisy coordinate
+    $\mathbf{X}_t$ and lattice $\boldsymbol{\ell}_t$ embeddings are then added to the
+    single representation and processed by a DiT trunk, with the refined pair
+    representation providing attention biases throughout. Separate heads predict the
+    coordinate and lattice endpoints $\widehat{\mathbf{X}}_1$ and
+    $\widehat{\boldsymbol{\ell}}_1$.}
+    \label{fig:method-architecture}
+\end{figure}

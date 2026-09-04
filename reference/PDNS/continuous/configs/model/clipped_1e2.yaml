@@ -1,0 +1,6 @@
+defaults:
+  - base@base_model: fouriermlp
+  - _self_
+
+_target_: src.components.controllers.ClippedCtrl
+clip_norm: 1e2

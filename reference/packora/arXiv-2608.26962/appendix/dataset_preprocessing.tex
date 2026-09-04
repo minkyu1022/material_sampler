@@ -1,0 +1,59 @@
+\section{Ablation Dataset Preprocessing}
+\label{app:dataset-preprocessing}
+
+This section describes the dataset preprocessing used for our ablation studies in \Cref{sec:ablations}. 
+Because public split refcodes were not available at the time, we constructed the 
+dataset independently. The preprocessing consists of four stages: filtering, structure 
+processing, benchmark exclusion, and deduplication. \Cref{tab:dataset-preprocessing-counts}
+reports the number of structures remaining after each stage.
+
+\textbf{Filtering.}
+Following OXtal~\citep{jin2025oxtal}, we use CSD entries deposited by May 1,
+2025 and retain structures with three-dimensional coordinates, an $R$-factor of at most $9\%$, single-crystal X-ray diffraction at ambient pressure, a non-polymeric structure, and a known space group. We
+Niggli-reduce each crystal, add missing hydrogens with the CSD Python API~\citep{sykes2024scripting}, and apply the 512-atom limit.
+
+\textbf{Structure processing.}
+For entries with incomplete bond labels, we infer missing bond types
+and standardize aromatic and delocalized bonds with the CSD Python API~\citep{sykes2024scripting}. 
+For each crystal, we store Cartesian coordinates, the unit cell, atomic numbers, bonds and bond types, 
+formal charges, stereochemical annotations, and the space-group label. We generate an independent
+3D conformer for each molecular component using RDKit ETKDGv3~\citep{rdkit,wang2020improving}.
+If conformer generation fails, we retain the crystal and mark the template as unavailable.
+
+\textbf{Benchmark exclusion.}
+To prevent leakage, we exclude structures overlapping with the OXtal Rigid and
+Flexible benchmarks~\citep{jin2025oxtal}, CSP5--7~\citep{bardwell2011fifth,
+reilly2016sixth,hunnisett2024seventhgeneration}, and the CSD Teaching
+Subset~\citep{battle2010applications,lo2026clari}. We first remove entries whose
+six-letter CSD refcode family matches a benchmark family. We then remove entries
+containing a molecular component found in the benchmark set, using the CSD-provided
+component SMILES. Following CLARI~\citep{lo2026clari}, we exclude recognized solvents 
+and components with fewer than eight heavy atoms from this overlap check.
+
+\textbf{Deduplication.}
+We group the remaining entries by six-letter CSD refcode family and cluster
+equivalent structures using pymatgen StructureMatcher~\citep{ong2013pymatgen}
+with \texttt{ltol}$=0.2$, \texttt{stol}$=0.3$, and \texttt{angle\_tol}$=5^\circ$. 
+Within each cluster, we retain the entry with the lowest reported $R$-factor.
+
+\begin{table}[H]
+\centering
+\caption{\textbf{Ablation dataset preprocessing counts.}
+We report the number of structures remaining after each
+stage.}
+\label{tab:dataset-preprocessing-counts}
+\begin{tabular}{@{}lr@{}}
+\toprule
+Stage & \# Structures \\
+\midrule
+Raw CSD entries & 1{,}451{,}367 \\
+Filtering and structure preprocessing & 833{,}033 \\
+Benchmark-family exclusion & 831{,}018 \\
+Benchmark-component exclusion & 798{,}459 \\
+Deduplication & 766{,}391 \\
+\midrule
+Training split & 751{,}023 \\
+Validation split & 15{,}368 \\
+\bottomrule
+\end{tabular}
+\end{table}

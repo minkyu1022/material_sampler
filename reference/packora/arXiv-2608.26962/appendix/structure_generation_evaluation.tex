@@ -1,0 +1,71 @@
+\section{Structure Generation Evaluation}
+\label{app:structure-generation-evaluation}
+
+This section details the evaluation protocol for structure generation. We
+formalize the crystal solve rate $\mathrm{Sol}_C$~\citep{jin2025oxtal},
+including COMPACK~\citep{chisholm2005compack} matching, collision detection,
+and experimental-reference selection. We also summarize the differences between
+the released OXtal and CLARI evaluators that motivate our re-evaluation of CLARI.
+
+\textbf{Definition of crystal solve rate.}
+Let $c\in\{1,\ldots,C\}$ index targets and
+$s\in\{1,\ldots,n_c\}$ index generated candidates for target $c$. The
+crystal-level solve rate is
+\begin{equation}
+    \mathrm{Sol}_C
+    =\frac{1}{C}\sum_{c=1}^{C}\max_{1\leq s\leq n_c}
+        \mathrm{sol}_{c,s},
+\end{equation}
+where $\mathrm{sol}_{c,s}$ indicates whether candidate $x_{c,s}$ solves target
+$c$:
+\begin{equation}
+    \mathrm{sol}_{c,s}
+    =\mathbf{1}\!\left[
+        \mathrm{col}_{c,s}=0
+        \ \land\ n_{15}(x_{c,s},t^\star_{c,s})\geq 8
+        \ \land\ r_{15}(x_{c,s},t^\star_{c,s})<2\,\text{\AA}
+    \right],
+\end{equation}
+where $\mathrm{col}_{c,s}$ is the collision indicator; $n_{15}$ and $r_{15}$
+denote the number of matched molecules and RMSD, respectively, returned by
+COMPACK at packing size 15; and $t^\star_{c,s}$ is the selected experimental
+reference.
+
+Intuitively, a candidate is collision-free ($\mathrm{col}_{c,s}=0$) if all
+nonbonded heavy-atom pairs are separated beyond the collision threshold.
+Specifically,
+\begin{equation}
+    \mathrm{col}_{c,s}
+    =\mathbf{1}\!\left[
+        \exists(i,j):
+        r_i^{\mathrm{vdW}}+r_j^{\mathrm{vdW}}-d_{ij}^{(c,s)}
+        \geq 0.7\,\text{\AA}
+    \right],
+\end{equation}
+where $d_{ij}^{(c,s)}$ is the distance between a nonbonded heavy-atom pair
+$(i,j)$, and $r_i^{\mathrm{vdW}}$ and $r_j^{\mathrm{vdW}}$ are their van der
+Waals radii.
+
+For targets with multiple experimental references, we select the best-matching
+reference as $t^\star_{c,s}$. Let $T(c)$ denote the reference set for target $c$
+and define
+\begin{equation}
+    P_{c,s}=\{t\in T(c):n_{15}(x_{c,s},t)\geq 8\}.
+\end{equation}
+OXtal selects
+\begin{equation}
+    t^\star_{c,s}=
+    \begin{cases}
+        \displaystyle\arg\min_{t\in P_{c,s}} r_{15}(x_{c,s},t),
+        & P_{c,s}\neq\varnothing,\\[3pt]
+        \displaystyle\arg\max_{t\in T(c)} n_{15}(x_{c,s},t),
+        & P_{c,s}=\varnothing.
+    \end{cases}
+\end{equation}
+
+\textbf{Differences between the OXtal and CLARI evaluators.}
+The released CLARI evaluator differs from the OXtal evaluator in two aspects:
+(1) collision detection, including the treatment of intermolecular collisions,
+and (2) selection of the best experimental reference for targets with multiple
+reference structures. For a consistent comparison, we therefore re-evaluate
+CLARI-M, CLARI-L, and CLARI-H using the OXtal definitions.

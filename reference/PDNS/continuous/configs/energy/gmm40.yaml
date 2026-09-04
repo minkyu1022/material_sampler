@@ -1,0 +1,11 @@
+_target_: src.energies.dist_energy.DistEnergy
+
+dist:
+  _target_: src.energies.dist_utils.GMM40
+  num_components: 40
+  dim: ${dim}
+  log_Z: 0.
+  can_sample: True
+  sample_bounds: None
+  loc_scaling: 40
+  scale_scaling: 1

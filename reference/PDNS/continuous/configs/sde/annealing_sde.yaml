@@ -1,0 +1,7 @@
+_target_: src.components.sdes.AnnealedSDE
+beta0: ${annealing_beta0}
+beta1: ${annealing_beta1}
+sigma: ${sigma}
+max_grad_E_norm: ${max_grad_E_norm}
+type: ${annealing_type}
+

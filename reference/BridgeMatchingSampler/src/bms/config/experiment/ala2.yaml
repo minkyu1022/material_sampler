@@ -1,0 +1,135 @@
+# @package _global_
+# Bridge Matching Sampler on alanine dipeptide (ALA2, d = 66).
+defaults:
+  - /model: painn
+
+name: ala2
+
+################################################################################
+# System setup
+################################################################################
+temperature: 300.0
+composition: HCH2CONHCHCH3CONHCH3
+num_atoms: 22
+topology_pdb_file: md_data/ala2/ala2_ref.pdb
+mean_free: true
+
+################################################################################
+# Model (controller producing the SDE control)
+################################################################################
+controller:
+  _target_: bms.model.controller.ClippedModel
+  base_model: ${model}
+  subtract_mean: true
+  clip_value: null
+
+################################################################################
+# Optimization
+################################################################################
+controller_optimizer:
+  _target_: torch.optim.AdamW
+  lr: 1e-4
+  weight_decay: 0.001
+
+gradient_clip_val: 100.0
+ema_decay: null
+ema_start_step: 0
+
+# Damped fixed-point iteration: snapshot the previous control u_i every
+# `prev_model_interval_epoch` epochs and regularize towards it with weight
+# `damping` (the damping parameter eta in the paper). Set damping > 0 (e.g. 10)
+# for the damped variant.
+prev_model_interval_epoch: 25
+damping: 0.0
+
+skip_scheduler_steps: 0
+controller_scheduler:
+  _target_: bms.utils.training.CosineAnnealingWithWarmupScheduler
+  curriculum:
+    _target_: bms.utils.training.TrainingCurriculum
+    curriculum: ${curriculum}
+  task_name: bridge_matching
+  steps_per_epoch: ${steps_per_epoch}
+  warmup_epochs: 50
+  eta_min: 1e-5
+
+################################################################################
+# Replay buffer (per-GPU)
+################################################################################
+buffer:
+  _target_: bms.data.buffer.ReplayBuffer
+  max_size: 2048
+  filter_nan: true
+
+initial_buffer_samples: 256
+buffer_samples_per_epoch: 256
+log_buffer_energy: true
+log_buffer_grad_norm: true
+
+################################################################################
+# Prior, reference SDE, and integrator
+################################################################################
+source:
+  _target_: bms.process.source.GaussianSource
+  num_atoms: ${num_atoms}
+  center: ${mean_free}
+  scale: 1.0
+
+base_sde:
+  _target_: bms.process.sde.EDMSDE
+  sigma_min: 0.001
+  sigma_max: 6.0
+  rho: 3.0
+
+integrator:
+  _target_: bms.process.integrator.EulerMaruyamaIntegrator
+  timesteps:
+    _target_: bms.process.integrator.get_timesteps
+    t0: 0.0
+    t1: 1.0
+    steps: 50
+    rescale_t: null
+
+################################################################################
+# Target potential and terminal cost (target score)
+################################################################################
+potential:
+  _target_: bms.potential.base.SumPotential
+  potentials:
+    # Classical force field + reference data, evaluated through boltzkit.
+    - _target_: bms.potential.boltzkit_potential.BoltzkitPotential
+      system:
+        _target_: boltzkit.targets.boltzmann.MolecularBoltzmann
+        path: datasets/chrklitz99/alanine_dipeptide
+        length_unit: angstrom
+        n_workers: 4
+      device: cuda
+    # Flat-bottom restraints keeping the L-chirality of the stereocenter.
+    - _target_: bms.potential.restraint.ChiralityRestraint
+      indices: [[8, 6, 14, 10]]  # CA, N, C, CB improper torsion
+      location: 0.6154797086703873  # +35 deg
+      force_constant: 25.0  # eV/rad^2
+    - _target_: bms.potential.restraint.ChiralityRestraint
+      indices: [[8, 6, 14, 9]]  # CA, N, C, HA improper torsion
+      location: -0.6154797086703873  # -35 deg
+      force_constant: 25.0  # eV/rad^2
+
+terminal_cost:
+  _target_: bms.process.terminal_cost.BMSTerminalCost
+  temperature: ${temperature}
+  grad_clip_val: 100.0
+
+annealer:
+  _target_: bms.process.annealer.TemperatureAnnealer
+  epochs: [0, 500]
+  temperatures: [300.0, 300.0]  # no annealing
+
+################################################################################
+# Training schedule
+################################################################################
+train_batch_size: 64
+inference_batch_size: 64
+steps_per_epoch: 100
+
+curriculum:
+  - bridge_matching: 7000

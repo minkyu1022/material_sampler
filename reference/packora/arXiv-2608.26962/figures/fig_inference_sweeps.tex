@@ -1,0 +1,14 @@
+\begin{figure}[!t]
+  \centering
+  \includegraphics[width=\textwidth]{figures/generated/fig_inference_sweeps.pdf}
+  \caption{\textbf{Inference ablations.}
+    \textbf{(a)} Validation $\mathrm{Sol}_C$ versus NFE budget for flow ODE,
+    flow SDE, and EDM--Heun. \textbf{(b)} EDM--Heun with 400 NFEs across
+    discretization exponents $\rho$; the failed $\rho=1$ result is shown at the
+    lower boundary, and the star marks the selected $\rho=7$.
+    \textbf{(c)} Validation trajectories with no template augmentation,
+    rotation only, and rotation plus translation at inference.
+    \textbf{(d)} Autoguidance using degraded checkpoints from epochs 50, 100,
+    and 150 across guidance weights $\omega$.}
+  \label{fig:inference-sweeps}
+\end{figure}

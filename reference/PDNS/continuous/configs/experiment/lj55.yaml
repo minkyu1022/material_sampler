@@ -1,0 +1,66 @@
+# @package _global_
+
+# to execute this experiment run:
+# python train.py experiment=example
+
+# all parameters below will be merged with parameters from default configurations set above
+# this allows you to overwrite only specified parameters
+
+defaults:
+  - /source: meanfree # meanfree, delta, harmonic
+  - /energy: lj55
+  - /sde@ref_sde: graph_vp
+  - /model@controller: clipped-gnn
+  - /scheduler@gamma_scheduler: adaptive
+  - /sde@annealed_sde: graph_annealing_sde
+
+# === problem ===
+spatial_dim: 3
+n_particles: 55
+dim: 165 # 55x3
+plot_lim: false
+
+# === sde ===
+nfe: 1000
+sigma: 2.0
+meanfree_source_scale: ${sigma} # source std when using meanfree or harmonic prior
+sigma_max: ${sigma}
+sigma_min: 0.1 ## Use smaller sigma_max
+beta0: 10.0
+beta1: 0.1
+rescale_t: null # quad, cosine
+zero_last_step_noise: true
+
+# === annealed sde ===
+annealing_beta0: ${beta0}
+annealing_beta1: ${beta1}
+annealing_type: 'annealed'
+max_grad_E_norm: 100
+
+# === step parameters (IMPORTANT!!) ===
+gamma: 1.0
+epsilon: 1.0
+alpha: 1.0
+
+# === solver ===
+iws: true
+annealed: true
+cumulate: false
+score_matcher:
+  buffer_size: 50000
+  duplicates: 1
+
+# === training ===
+num_epochs: 100000
+ema_decay: 0.999
+num_epochs_per_stage: 100
+
+optim:
+  lr: 1e-4
+  weight_decay: 0
+  beta1: 0.0
+  beta2: 0.9
+
+# === eval & logging ===
+use_wandb: true
+eval_freq: 1000

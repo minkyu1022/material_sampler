@@ -1,0 +1,25 @@
+\begin{table}[H]
+\centering
+\caption{\textbf{Architecture ablation with model size and compute.}
+We report parameter count and GFLOPs for each architecture variant, together with
+its best validation $\mathrm{Sol}_C$ under the shared $\leq300$-atom,
+30-candidate protocol with 200-step EDM--Heun sampling. Config.~(F) is the selected cacheable post-entry design.}
+\label{tab:architecture_ablation}
+\begin{tabular}{lcccccccc}
+\toprule
+Config. & Entry & TriMul & TriAtt & SU & GEM & $\mathrm{Sol}_C \uparrow$ &
+Params (M) & GFLOPs \\
+\midrule
+(A) & -- & -- & -- & -- & -- & 0.421 & 85.98 & 41.2 \\
+(B) & -- & -- & -- & -- & \checkmark & 0.432 & 86.01 & 45.7 \\
+(C) & pre & \checkmark & -- & -- & -- & 0.479 & 87.56 & 379.6 \\
+(D) & pre & \checkmark & -- & \checkmark & -- & 0.469 & 105.40 & 391.8 \\
+(E) & pre & \checkmark & -- & -- & \checkmark & 0.476 & 87.59 & 384.2 \\
+\rowcolor{mfTealFill}
+(F) & post & \checkmark & -- & -- & -- & 0.474 & 87.56 & 379.6 \\
+(G) & post & \checkmark & -- & \checkmark & -- & 0.445 & 105.40 & 391.8 \\
+(H) & post & \checkmark & -- & -- & \checkmark & 0.474 & 87.59 & 384.2 \\
+(I) & post & \checkmark & \checkmark & \checkmark & -- & 0.462 & 106.07 & 621.1 \\
+\bottomrule
+\end{tabular}
+\end{table}

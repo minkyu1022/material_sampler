@@ -1,0 +1,6 @@
+defaults:
+  - base@base_model: fouriermlp
+
+_target_: src.components.controllers.PotentialCtrl
+base_model:
+  dim_out: 1

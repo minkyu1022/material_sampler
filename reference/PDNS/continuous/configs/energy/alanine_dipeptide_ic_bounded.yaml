@@ -1,0 +1,21 @@
+_target_: src.energies.alanine_dipeptide_energy.AlanineDipeptideEnergyICBounded
+fab_config_path: fab/config.yaml
+device: cuda
+
+# Boundary parameters for hard constraints
+bond_length_bounds: [0.5, 3.0]    # Angstroms - reasonable chemical bonds
+bond_angle_bounds: [0.1, 3.0]     # radians - avoid 0 and π (linear)
+dihedral_bounds: [-3.14159, 3.14159]  # [-π, π] for one full cycle
+boundary_penalty: 50.0           # Moderate penalty to avoid numerical issues (probability ≈ exp(-50) ≈ 0)
+name: ad
+dim: ${dim}
+n_particles: 22
+data_path_val: data/val_split_AD.h5
+data_path_test: data/test_split_AD.h5
+is_molecule: True
+
+# Notes:
+# - bond_length_bounds: Typical chemical bonds range from ~0.5-3.0 Å
+# - bond_angle_bounds: Avoid 0 and π radians (linear arrangements) 
+# - dihedral_bounds: Strict [-π, π] range for one angle cycle
+# - boundary_penalty: High value ensures probability ≈ 0 for violations

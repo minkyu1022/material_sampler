@@ -1,0 +1,22 @@
+\section{Conclusion}
+
+We present \model{}, a flexible all-atom generator for molecular CSP based on
+variational flow matching. \model{} supports multi-component and organometallic
+crystals and optional conditioning on molecular templates, stereochemistry, and
+space-group information. Controlled studies of architecture, training,
+conditioning, inference, and scaling yield a practical recipe based on cacheable
+Pairmixer representations, $L^1$ endpoint regression, EDM--Heun sampling, and
+balanced single- and pair-track capacity. Inspired by the CCDC CSP blind tests, we introduce a two-track evaluation that separates generator-only coverage from end-to-end performance under a common downstream relaxation and ranking pipeline. Across six benchmarks, \model{} achieves the best matched-budget
+coverage, while under the shared downstream pipeline it achieves higher
+experimental-form recovery, lower ranks, and faster convergence than the baselines.
+
+\textbf{Limitations and discussion.}
+First, our controlled ablations vary design choices one at a time, 
+and therefore do not capture interactions among architecture, training,
+conditioning, inference, and scaling; the selected recipe is not guaranteed to be
+globally optimal. Second, our ablations and model selection primarily use
+$k{=}30$ candidates, although the best model may depend on the candidate budget.
+Our scaling results show a trade-off between small-budget success and larger-budget
+coverage, suggesting that model selection may benefit from larger candidate pools.
+Determining an appropriate selection budget therefore remains an important
+question for generative CSP.

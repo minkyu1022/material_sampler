@@ -1,0 +1,30 @@
+{
+  "schema": "crystalite-mp20-token-compatible-v1",
+  "items": 32,
+  "failures": 0,
+  "species_sorted": false,
+  "species_coordinate_order_preserved": true,
+  "niggli_reduced": true,
+  "primitive_reduced": false,
+  "composition_counts": {
+    "0": 32
+  },
+  "diversity_by_n_cu": {
+    "0": {
+      "count": 32,
+      "unique_fingerprints": 32,
+      "approx_duplicate_count": 0,
+      "final_energy_eV_mean": -480.5998422781164,
+      "final_energy_eV_std": 4.246802012532872e-05,
+      "final_volume_A3_mean": 1177.649287077741,
+      "final_volume_A3_std": 0.11044931589612134
+    }
+  },
+  "duplicate_definition": "SHA256(composition and species-pair minimum-image distance spectra rounded 1e-4 A)",
+  "crystalite_split": {
+    "train": 30,
+    "val": 2,
+    "root": "/home/spml_minkyu_kim/joint_sampler/cont_task/data/crystalite_cuni_pilot"
+  },
+  "output": "/home/spml_minkyu_kim/joint_sampler/cont_task/data/processed_pilot_v3/cuni_tokens.pt"
+}

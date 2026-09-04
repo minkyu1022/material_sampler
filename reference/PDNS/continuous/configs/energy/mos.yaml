@@ -1,0 +1,7 @@
+_target_: src.energies.dist_energy.DistEnergy
+
+dist:
+  _target_: src.energies.student_t.StudentTMixtureModel
+  num_components: 10
+  dim: ${dim}
+  device: 'cuda:0'

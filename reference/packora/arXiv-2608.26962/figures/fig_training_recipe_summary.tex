@@ -1,0 +1,18 @@
+
+\begin{figure}[!t]
+  \centering
+  \includegraphics[width=\textwidth]{figures/generated/fig_training_recipe_summary.pdf}
+  \caption{\textbf{Training recipe selection.} All panels report
+    validation $\mathrm{Sol}_C$ under EDM Heun 200 with a generation budget of
+    30 candidates.
+    \textbf{(a)} The Beta--uniform mixture gives the strongest completed score.
+    \textbf{(b)} With L1 regression, crystal translation improves the best score
+    from $0.466$ to $0.486$; under translation, L1 outperforms L2
+    ($0.486$ vs.\ $0.407$). \textbf{(c)} A $10{:}1$ coordinate-to-lattice
+    ratio is optimal. \textbf{(d)} At $\lambda{=}5$, smooth-LDDT improves the
+    best score by only $0.004$ while increasing training cost from
+    436 to 599 GPU-hours. \textbf{(e)} Muon outperforms
+    AdamW. \textbf{(f)} EMA decay $0.9999$ outperforms raw weights and decay
+    $0.999$.}
+  \label{fig:training-recipe-summary}
+\end{figure}

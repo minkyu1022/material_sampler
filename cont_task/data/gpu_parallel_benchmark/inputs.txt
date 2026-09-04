@@ -1,0 +1,4 @@
+cont_task/data/cuni_reference_relaxed_full_v2/N108_T0500.00_mu00.8200_walker0/raw/frame_0000.extxyz
+cont_task/data/cuni_reference_relaxed_full_v2/N108_T0500.00_mu00.8200_walker0/raw/frame_0007.extxyz
+cont_task/data/cuni_reference_relaxed_full_v2/N108_T0500.00_mu00.8200_walker0/raw/frame_0005.extxyz
+cont_task/data/cuni_reference_relaxed_full_v2/N108_T0500.00_mu00.8200_walker0/raw/frame_0001.extxyz

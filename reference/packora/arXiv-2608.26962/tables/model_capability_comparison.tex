@@ -1,0 +1,43 @@
+\begin{table*}[t]
+\centering
+\caption{\textbf{Capabilities and scope of generative molecular CSP models.}
+We compare explicit hydrogen generation, chemical scope, and conditioning inputs.
+\capsupported{} and \capunsupported{} denote supported and unsupported capabilities.
+For local 3D input, \caprequired{}, \capsupported{}, and \capunsupported{} denote
+required, optional, and unsupported conditioning, respectively.}
+\label{tab:model-capability-comparison}
+\small
+\setlength{\tabcolsep}{4.0pt}
+\begin{tabular}{@{}lcccccc@{}}
+\toprule
+& \multicolumn{1}{c}{Generation}
+& \multicolumn{2}{c}{Chemical/data scope}
+& \multicolumn{3}{c}{Conditioning inputs} \\
+\cmidrule(lr){2-2}\cmidrule(lr){3-4}\cmidrule(l){5-7}
+Method
+& \shortstack{Explicit H\\output}
+& \shortstack{Multi-\\component}
+& \shortstack{Organo-\\metallics}
+& \shortstack{Local 3D\\input}
+& \shortstack{Stereo\\labels}
+& \shortstack{Space\\group} \\
+\midrule
+OXtal~\citep{jin2025oxtal}
+& \capunsupported{} & \capsupported{} & \capsupported{}
+& \caprequired{} & \capunsupported{} & \capunsupported{} \\
+PackFlow~\citep{subramanian2026packflow}
+& \capunsupported{} & \capunsupported{} & \capunsupported{}
+& \capunsupported{} & \capunsupported{} & \capunsupported{} \\
+MolCrystalFlow~\citep{zeng2026molcrystalflow}
+& \capsupported{} & \capunsupported{} & \capunsupported{}
+& \caprequired{} & \capunsupported{} & \capunsupported{} \\
+CLARI~\citep{lo2026clari}
+& \capsupported{} & \capsupported{} & \capsupported{}
+& \capunsupported{} & \capunsupported{} & \capunsupported{} \\
+\rowcolor{mfTealFill}
+\model{}
+& \capsupported{} & \capsupported{} & \capsupported{}
+& \capsupported{} & \capsupported{} & \capsupported{} \\
+\bottomrule
+\end{tabular}
+\end{table*}

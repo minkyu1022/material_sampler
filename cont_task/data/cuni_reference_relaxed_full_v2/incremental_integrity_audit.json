@@ -1,0 +1,11 @@
+{
+  "audited_epoch": 1788480308,
+  "population": 41900,
+  "sampled": 256,
+  "errors": [],
+  "max_source_raw_fractional_error": 4.736214753719992e-10,
+  "max_source_raw_log_volume_error": 1.7763568394002505e-15,
+  "max_cif_relaxed_cellpar_error": 1.4210854715202004e-14,
+  "max_cif_relaxed_fractional_error": 4.734678760165423e-10,
+  "passed": true
+}

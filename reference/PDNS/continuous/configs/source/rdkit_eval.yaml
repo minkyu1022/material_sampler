@@ -1,0 +1,3 @@
+_target_: src.utils.chem_utils.CenteredRDKit
+n_systems_per_batch: 1
+smiles_list: ${eval_smiles}

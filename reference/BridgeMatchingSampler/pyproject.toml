@@ -1,0 +1,48 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bms"
+version = "0.1.0"
+description = "Bridge Matching Sampler: scalable sampling via generalized fixed-point diffusion matching"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+authors = [
+    { name = "Denis Blessing" },
+    { name = "Lorenz Richter" },
+    { name = "Julius Berner" },
+    { name = "Egor Malitskiy" },
+    { name = "Gerhard Neumann" },
+]
+dependencies = [
+    "numpy<2",
+    "torch",
+    "lightning",
+    "pytorch-lightning",
+    "hydra-core",
+    "omegaconf",
+    "mdtraj",
+    "ase",
+    "scipy",
+    "tqdm",
+    "wandb",
+    "matplotlib",
+    "deeptime",
+    "POT",
+    # Target densities, reference data, and evaluation metrics.
+    "boltzkit @ git+https://github.com/ChristophervonKlitzing/boltzkit",
+]
+
+[project.optional-dependencies]
+dev = ["black", "pytest"]
+
+[project.urls]
+Homepage = "https://github.com/DenisBless/BridgeMatchingSampler"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+bms = ["config/**/*.yaml"]

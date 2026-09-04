@@ -1,0 +1,10 @@
+name: bms
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - pip
+  - openmm=8.0.0
+  - mdtraj
+  - pip:
+    - -e .

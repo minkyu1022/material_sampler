@@ -1,0 +1,40 @@
+{
+  "schema": "crystalite-mp20-token-compatible-v1",
+  "items": 256,
+  "failures": 0,
+  "species_sorted": false,
+  "species_coordinate_order_preserved": true,
+  "niggli_reduced": true,
+  "primitive_reduced": false,
+  "composition_counts": {
+    "0": 251,
+    "1": 5
+  },
+  "diversity_by_n_cu": {
+    "0": {
+      "count": 251,
+      "unique_fingerprints": 251,
+      "approx_duplicate_count": 0,
+      "final_energy_eV_mean": -480.59984025264805,
+      "final_energy_eV_std": 6.217038207783352e-05,
+      "final_volume_A3_mean": 1177.6475640559056,
+      "final_volume_A3_std": 0.1542247433502864
+    },
+    "1": {
+      "count": 5,
+      "unique_fingerprints": 5,
+      "approx_duplicate_count": 0,
+      "final_energy_eV_mean": -479.54305069027987,
+      "final_energy_eV_std": 2.7769404808551393e-05,
+      "final_volume_A3_mean": 1179.1698286857081,
+      "final_volume_A3_std": 0.008420162498959043
+    }
+  },
+  "duplicate_definition": "SHA256(composition and species-pair minimum-image distance spectra rounded 1e-4 A)",
+  "crystalite_split": {
+    "train": 242,
+    "val": 14,
+    "root": "/home/spml_minkyu_kim/joint_sampler/cont_task/data/preprocess_benchmark/crystalite"
+  },
+  "output": "/home/spml_minkyu_kim/joint_sampler/cont_task/data/preprocess_benchmark/cuni_tokens.pt"
+}

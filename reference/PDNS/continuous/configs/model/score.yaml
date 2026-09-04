@@ -1,0 +1,16 @@
+defaults:
+  - _self_
+  - base@base_model: fouriermlp
+  - base@score_model: time_embed
+
+
+_target_: src.components.controllers.ScoreCtrl
+detach_score: False
+score_model:
+  last_bias_init:
+    _target_: torch.nn.init.constant_
+    # val: 0.01
+    _partial_: True
+clip_score: 1e4
+clip_norm: 1e4
+scale_score: 1.

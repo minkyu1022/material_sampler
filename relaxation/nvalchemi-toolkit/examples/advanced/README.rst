@@ -1,0 +1,35 @@
+Advanced Examples
+=================
+
+These examples are for users who want to extend the nvalchemi-toolkit
+framework.  They require understanding of the intermediate tier.
+
+**01 — Biased Potential**: BiasedPotentialHook for harmonic COM restraints
+and umbrella sampling patterns.
+
+**02 — Custom Hook**: Implementing the Hook protocol with a full
+radial distribution function accumulator.
+
+**03 — Custom Convergence**: ConvergenceHook with multiple criteria and
+custom_op for arbitrary convergence logic.
+
+**04 — MACE NVT**: Using a real MACE MLIP for NVT dynamics; automatic
+neighbor list wiring via ModelConfig; LJ fallback for CI.
+
+**05 — Custom Integrator**: Subclassing BaseDynamics to implement a
+velocity-rescaling thermostat; the pre_update/post_update contract;
+_init_state for stateful integrators.
+
+**07 — Composable Model Composition**: Combining LJ + Ewald models with
+the ``+`` operator; PipelineModelWrapper for dependent pipelines.
+
+**08 — AIMNet2 + Ewald Pipeline**: Composing AIMNet2 with Ewald
+electrostatics and DFTD3 dispersion in a multi-group pipeline.
+
+**09 — UMA NVE/NVT**: Driving the fairchem UMA foundation model through
+NVE / NVT dynamics with energy-drift tracking; OMat crystals and OMol
+molecules via task selection on ``UMAWrapper.from_checkpoint``.
+
+**10 — MACE Training**: Training a ScaleShiftMACE model with the ALCHEMI
+training stack; Zarr dataloading, scheduled Huber losses, EMA, checkpointing,
+validation, and distributed launch patterns.

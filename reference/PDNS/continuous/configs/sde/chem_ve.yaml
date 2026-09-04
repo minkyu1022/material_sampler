@@ -1,0 +1,3 @@
+_target_: src.components.sdes.ChemVESDE
+sigma_max: ${sigma_max}
+sigma_min: ${sigma_min}

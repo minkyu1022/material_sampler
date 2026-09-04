@@ -1,0 +1,91 @@
+{
+  "audited_epoch": 1788480207,
+  "potential": "/home/spml_minkyu_kim/joint_sampler/reference/JANUS/janus_reproduce/potentials/cu_ni/Cu_Ni_Fischer_2018.eam.alloy",
+  "sha256": "ee585bf9884a4ac2548abb395e81a12a941505983aaa058ef546929df74cf240",
+  "samples": [
+    {
+      "chain": "N108_T0500.00_mu00.6000_walker0",
+      "source_stored_eV": -474.318603515625,
+      "recomputed_eV": -474.31863190054986,
+      "relax_record_eV": -474.3186319223663,
+      "abs_recomputed_vs_record_eV": 2.1816447315359255e-08,
+      "abs_recomputed_vs_source_eV": 2.8384924860347382e-05
+    },
+    {
+      "chain": "N108_T0500.00_mu00.6000_walker1",
+      "source_stored_eV": -474.0994567871094,
+      "recomputed_eV": -474.0994999690014,
+      "relax_record_eV": -474.0995000297411,
+      "abs_recomputed_vs_record_eV": 6.073969416320324e-08,
+      "abs_recomputed_vs_source_eV": 4.318189201057976e-05
+    },
+    {
+      "chain": "N108_T0500.00_mu00.6250_walker0",
+      "source_stored_eV": -474.4266357421875,
+      "recomputed_eV": -474.4266670527242,
+      "relax_record_eV": -474.4266670480935,
+      "abs_recomputed_vs_record_eV": 4.630692274076864e-09,
+      "abs_recomputed_vs_source_eV": 3.1310536712680914e-05
+    },
+    {
+      "chain": "N108_T0500.00_mu00.6250_walker1",
+      "source_stored_eV": -473.3983154296875,
+      "recomputed_eV": -473.3983400383416,
+      "relax_record_eV": -473.3983399962225,
+      "abs_recomputed_vs_record_eV": 4.211909754303633e-08,
+      "abs_recomputed_vs_source_eV": 2.4608654086932802e-05
+    },
+    {
+      "chain": "N108_T0500.00_mu00.6500_walker0",
+      "source_stored_eV": -474.57879638671875,
+      "recomputed_eV": -474.578846530411,
+      "relax_record_eV": -474.5788465198845,
+      "abs_recomputed_vs_record_eV": 1.0526491678319871e-08,
+      "abs_recomputed_vs_source_eV": 5.0143692249093874e-05
+    },
+    {
+      "chain": "N108_T0500.00_mu00.6500_walker1",
+      "source_stored_eV": -474.20587158203125,
+      "recomputed_eV": -474.20591585016047,
+      "relax_record_eV": -474.20591585355214,
+      "abs_recomputed_vs_record_eV": 3.391676273167832e-09,
+      "abs_recomputed_vs_source_eV": 4.426812921565215e-05
+    },
+    {
+      "chain": "N108_T0500.00_mu00.6750_walker0",
+      "source_stored_eV": -473.64349365234375,
+      "recomputed_eV": -473.6435276787238,
+      "relax_record_eV": -473.64352772340817,
+      "abs_recomputed_vs_record_eV": 4.468438419280574e-08,
+      "abs_recomputed_vs_source_eV": 3.402638003535685e-05
+    },
+    {
+      "chain": "N108_T0500.00_mu00.6750_walker1",
+      "source_stored_eV": -473.757080078125,
+      "recomputed_eV": -473.75711605618943,
+      "relax_record_eV": -473.7571159928644,
+      "abs_recomputed_vs_record_eV": 6.332504653983051e-08,
+      "abs_recomputed_vs_source_eV": 3.5978064431674284e-05
+    },
+    {
+      "chain": "N108_T0500.00_mu00.7000_walker0",
+      "source_stored_eV": -472.88092041015625,
+      "recomputed_eV": -472.88093401656545,
+      "relax_record_eV": -472.8809339822087,
+      "abs_recomputed_vs_record_eV": 3.435673079366097e-08,
+      "abs_recomputed_vs_source_eV": 1.3606409197564062e-05
+    },
+    {
+      "chain": "N108_T0500.00_mu00.7000_walker1",
+      "source_stored_eV": -474.1820068359375,
+      "recomputed_eV": -474.1820579397436,
+      "relax_record_eV": -474.1820579247734,
+      "abs_recomputed_vs_record_eV": 1.4970169104344677e-08,
+      "abs_recomputed_vs_source_eV": 5.110380607220577e-05
+    }
+  ],
+  "max_abs_recomputed_vs_relax_record_eV": 6.332504653983051e-08,
+  "max_abs_recomputed_vs_source_eV": 5.110380607220577e-05,
+  "source_tolerance_note": "Source NPZ energy_eV is float32-quantized; relaxation record recomputation is the exact float64 check.",
+  "passed": true
+}

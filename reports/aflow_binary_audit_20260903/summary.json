@@ -1,0 +1,76 @@
+{
+  "raw_entries_processed": 351136,
+  "unique_element_stoichiometries": 39669,
+  "raw_entries_per_composition": {
+    "n": 39669,
+    "mean": 8.851647382086767,
+    "median": 2.0,
+    "p75": 7.0,
+    "p90": 31.0,
+    "p95": 41.0,
+    "p99": 59.0,
+    "max": 473
+  },
+  "proxy_structure_families_per_composition": {
+    "n": 39669,
+    "mean": 8.811691749224835,
+    "median": 2.0,
+    "p75": 7.0,
+    "p90": 31.0,
+    "p95": 40.0,
+    "p99": 58.0,
+    "max": 473
+  },
+  "catalog_counts": {
+    "LIB2": 328608,
+    "ICSD": 22528
+  },
+  "Cu-Ni": {
+    "entries": 217,
+    "unique_stoichiometries": 30,
+    "entries_per_stoichiometry": {
+      "n": 30,
+      "mean": 7.233333333333333,
+      "median": 2.0,
+      "p75": 4.0,
+      "p90": 28.80000000000001,
+      "p95": 36.0,
+      "p99": 38.84,
+      "max": 40
+    },
+    "proxy_families_per_stoichiometry": {
+      "n": 30,
+      "mean": 7.233333333333333,
+      "median": 2.0,
+      "p75": 4.0,
+      "p90": 28.80000000000001,
+      "p95": 36.0,
+      "p99": 38.84,
+      "max": 40
+    }
+  },
+  "Cr-Ni": {
+    "entries": 238,
+    "unique_stoichiometries": 29,
+    "entries_per_stoichiometry": {
+      "n": 29,
+      "mean": 8.206896551724139,
+      "median": 2.0,
+      "p75": 4.0,
+      "p90": 32.599999999999994,
+      "p95": 41.39999999999999,
+      "p99": 43.72,
+      "max": 44
+    },
+    "proxy_families_per_stoichiometry": {
+      "n": 29,
+      "mean": 8.206896551724139,
+      "median": 2.0,
+      "p75": 4.0,
+      "p90": 32.599999999999994,
+      "p95": 41.39999999999999,
+      "p99": 43.72,
+      "max": 44
+    }
+  }
+}

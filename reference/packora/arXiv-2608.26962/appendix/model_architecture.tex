@@ -1,0 +1,221 @@
+\section{Model Architecture Details}
+\label{app:model-architecture}
+
+\algnewcommand{\AlgPhase}[1]{\Statex \texttt{\# #1}}
+
+\textbf{Notation.}
+This section specifies the \model{} forward pass in algorithmic form. Indices $i,j,k$ denote atoms, and $h$ denotes an attention head. We use $\mathbf S$ and $\mathbf P$ for single and pair representations, respectively. Symbols $E$, $W$, and $\operatorname{MLP}$ denote learned embedding functions, linear maps, and multilayer perceptrons, respectively, while $\operatorname{Norm}$ denotes normalization. $\operatorname{Split}$ and $\operatorname{Concat}$ partition and concatenate feature channels, respectively. We use $\sigma$ for the sigmoid function, $\phi$ for the configured activation function, $\odot$ for elementwise multiplication, and $d_h$ for the dimension of one attention head.
+
+\textbf{Overall forward pass.} \Cref{alg:model-forward} summarizes the complete forward pass: the model embeds the condition, refines pair features, injects the noisy crystal state, applies the DiT trunk, and predicts coordinate and lattice.
+
+\begin{algorithm}[H]
+\caption{Model forward pass}
+\label{alg:model-forward}
+\begin{algorithmic}[1]
+\Require Noisy state $(\mathbf X_t,\boldsymbol\ell_t)$, time $t$, condition
+$\mathcal C$, and valid-atom mask $\mathbf m$
+\Ensure Posterior mean $(\widehat{\mathbf X}_1,\widehat{\boldsymbol\ell}_1)$
+\AlgPhase{1. Encode the condition and refine pair features}
+\State $(\mathbf S_{\mathcal C},\mathbf P)
+    \gets \Call{ConditionEmbed}{\mathcal C,\mathbf m}$
+\For{each Pairmixer block}
+    \State $\mathbf P\gets\Call{PairmixerBlock}{\mathbf P,\mathbf m}$
+\EndFor
+\State $\mathbf P^\star\gets\mathbf P$
+\Statex
+\AlgPhase{2. Inject the noisy state}
+\State $(\mathbf S,\mathbf c_t)
+    \gets \Call{NoisyStateEmbed}{\mathbf S_{\mathcal C},\mathbf X_t,
+    \boldsymbol\ell_t,t}$
+\Statex
+\AlgPhase{3. Propagate and decode}
+\For{each DiT block}
+    \State $\mathbf S
+        \gets \Call{DiTBlock}{\mathbf S,\mathbf c_t,\mathbf P^\star,\mathbf m}$
+\EndFor
+\State $(\widehat{\mathbf X}_1,\widehat{\boldsymbol\ell}_1)
+    \gets \Call{PredictionHeads}{\mathbf S,\mathbf m}$
+\State \Return $(\widehat{\mathbf X}_1,\widehat{\boldsymbol\ell}_1)$
+\end{algorithmic}
+\end{algorithm}
+
+\textbf{Condition embedding.} For \Cref{alg:condition-embedding}, $\mathbf a_i$ contains the atomic number, periodic-table descriptors, formal charge, and chirality of atom $i$. Template coordinates are denoted by $\widetilde{\mathbf x}_i$, with availability indicator $m_{\mathrm T}$. Molecular membership, bond type, and bond stereochemistry are denoted by $u_i$, $\tau_{ij}$, and $\zeta_{ij}$, respectively; unavailable categorical conditions use learned null categories. The global condition contains the space-group embedding. Bond, stereochemistry, and template features are restricted to atom pairs within the same molecular component, and stereochemistry features are zero for nonbonded pairs.
+
+\begin{algorithm}[H]
+\caption{Condition embedding}
+\label{alg:condition-embedding}
+\begin{algorithmic}[1]
+\Require Condition $\mathcal C$ and valid-atom mask $\mathbf m$
+\Ensure Condition-only single representation $\mathbf S_{\mathcal C}$ and
+ordered pair representation $\mathbf P$
+\AlgPhase{1. Embed atom-level and global conditions}
+\State $\displaystyle
+\mathbf S_{\mathcal C,i}\gets
+E_{\mathrm{atom}}(\mathbf a_i)
++m_{\mathrm T}E_{\mathrm{temp}}(\widetilde{\mathbf x}_i)
++m_iE_{\mathrm{global}}(\mathcal C)$
+\Statex
+\AlgPhase{2. Construct intramolecular pair features}
+\State $M^{\mathrm{mol}}_{ij}\gets m_i m_j\mathbf 1[u_i=u_j]$
+\State $\boldsymbol\delta_{ij}
+    \gets\widetilde{\mathbf x}_i-\widetilde{\mathbf x}_j$,
+    $\rho_{ij}\gets(1+\lVert\boldsymbol\delta_{ij}\rVert_2^2)^{-1}$
+\Statex $\displaystyle \overline{\mathbf P}_{ij}\gets W_Q\mathbf S_{\mathcal C,i}+W_K\mathbf S_{\mathcal C,j}+M^{\mathrm{mol}}_{ij}\bigl[E_{\mathrm{bond}}(\tau_{ij})+E_{\mathrm{stereo}}(\zeta_{ij})+m_{\mathrm T}(W_\delta\boldsymbol\delta_{ij}+W_\rho\rho_{ij})\bigr].$
+\Statex
+\AlgPhase{3. Refine each pair independently}
+\State $\mathbf P_{ij}\gets\overline{\mathbf P}_{ij}
+    +\operatorname{MLP}_{P}\!\left(
+    \operatorname{Norm}_{P}(\overline{\mathbf P}_{ij})\right)$
+\State \Return $(\mathbf S_{\mathcal C},\mathbf P)$
+\end{algorithmic}
+\end{algorithm}
+
+\textbf{Pairmixer block.} \Cref{alg:pairmixer-block} updates only the pair representation using outgoing and incoming triangle multiplication followed by a gated pair transition. The mask $\mathbf m$ restricts all pair operations to valid atoms.
+
+\begin{algorithm}[H]
+\caption{Pairmixer block}
+\label{alg:pairmixer-block}
+\begin{algorithmic}[1]
+\Require Pair representation $\mathbf P$ and valid-atom mask $\mathbf m$
+\Ensure Updated pair representation $\mathbf P$
+\State $M_{ij}\gets m_i m_j$
+\AlgPhase{1. Aggregate information over outgoing and incoming triangles}
+\Statex $\displaystyle
+\operatorname{Contract}_{\mathrm{out}}(\mathbf A,\mathbf B)_{ij}
+\gets\sum_k\mathbf A_{ik}\odot\mathbf B_{jk},\qquad
+\operatorname{Contract}_{\mathrm{in}}(\mathbf A,\mathbf B)_{ij}
+\gets\sum_k\mathbf A_{ki}\odot\mathbf B_{kj}$
+\For{$d$ in the ordered sequence $(\mathrm{out},\mathrm{in})$}
+    \State $\overline{\mathbf P}\gets\operatorname{Norm}_{d}(\mathbf P)$
+    \Statex $\displaystyle
+    [\mathbf A,\mathbf B]\gets\operatorname{Split}\!\left(
+    W_p^{d}\overline{\mathbf P}
+    \odot\sigma(W_g^{d}\overline{\mathbf P})\right)\odot\mathbf M$
+    \State $\mathbf U\gets\operatorname{Contract}_{d}(\mathbf A,\mathbf B)$
+    \Statex $\displaystyle
+    \mathbf P\gets\mathbf P+
+    W_o^{d}\operatorname{Norm}'_{d}(\mathbf U)
+    \odot\sigma(W_{go}^{d}\overline{\mathbf P})$
+\EndFor
+\Statex
+\AlgPhase{2. Mix feature channels within each pair}
+\State $\overline{\mathbf P}\gets\operatorname{Norm}_{\mathrm{tr}}(\mathbf P)$
+\Statex $\displaystyle
+\mathbf P\gets\mathbf P+W_{\mathrm{tr}}\!\left[
+\operatorname{SiLU}(W_a\overline{\mathbf P})
+\odot W_b\overline{\mathbf P}\right]$
+\State \Return $\mathbf P$
+\end{algorithmic}
+\end{algorithm}
+
+\textbf{Noisy-state and time embedding.} In \Cref{alg:noisy-state-embedding}, $\boldsymbol\Omega$ and $\boldsymbol\eta$ are fixed random Fourier frequencies and phases for encoding the coordinates, while $\boldsymbol\omega$ contains the fixed frequencies used for the sinusoidal time embedding.
+
+\begin{algorithm}[H]
+\caption{Noisy-state and time embedding}
+\label{alg:noisy-state-embedding}
+\begin{algorithmic}[1]
+\Require Condition-only single representation $\mathbf S_{\mathcal C}$,
+noisy coordinates $\mathbf X_t$, noisy lattice $\boldsymbol\ell_t$, and time $t$
+\Ensure DiT input $\mathbf S$ and time condition $\mathbf c_t$
+\AlgPhase{1. Embed noisy coordinates into the single track}
+\State $\boldsymbol\Phi_i
+    \gets\sqrt{2}\cos(\boldsymbol\Omega\odot\mathbf X_{t,i}
+    +\boldsymbol\eta)$
+    \Comment{fixed random Fourier features}
+\State $\mathbf e_i^X\gets
+    \operatorname{MLP}_X(\operatorname{vec}(\boldsymbol\Phi_i))$
+\Statex
+\AlgPhase{2. Embed and broadcast the noisy lattice}
+\State $\mathbf e^L\gets\operatorname{MLP}_L(\boldsymbol\ell_t)$
+\State $\mathbf S_i\gets
+    \mathbf S_{\mathcal C,i}+\mathbf e_i^X+\mathbf e^L$
+    \Comment{$\mathbf e^L$ is broadcast over atoms}
+\Statex
+\AlgPhase{3. Embed flow time}
+\State $\boldsymbol\psi(t)\gets
+    [\cos(\boldsymbol\omega t),\sin(\boldsymbol\omega t)]$
+    \Comment{fixed sinusoidal frequencies}
+\State $\mathbf c_t\gets\operatorname{MLP}_t(\boldsymbol\psi(t))$
+\State \Return $(\mathbf S,\mathbf c_t)$
+\end{algorithmic}
+\end{algorithm}
+
+\textbf{DiT block.} In \Cref{alg:dit-block}, $\boldsymbol\beta$, $\boldsymbol\alpha$, and $\boldsymbol\gamma$ denote the adaptive shift, scale, and residual-gate vectors, respectively. Subscripts $A$ and $F$ distinguish modulation parameters for the attention and feed-forward updates.
+
+\begin{algorithm}[H]
+\caption{Pair-biased DiT block}
+\label{alg:dit-block}
+\begin{algorithmic}[1]
+\Require Single representation $\mathbf S$, time condition $\mathbf c_t$,
+refined pair representation $\mathbf P^\star$, and mask $\mathbf m$
+\Ensure Updated single representation $\mathbf S$
+\AlgPhase{1. Generate time-dependent modulation}
+\Statex $\displaystyle
+[\boldsymbol\beta_A,\boldsymbol\alpha_A,\boldsymbol\gamma_A,
+  \boldsymbol\beta_F,\boldsymbol\alpha_F,\boldsymbol\gamma_F]
+\gets W_c\phi(\mathbf c_t)$
+\State $\mathbf U_i\gets
+    (1+\boldsymbol\alpha_A)\odot\operatorname{Norm}_1(\mathbf S_i)
+    +\boldsymbol\beta_A$
+\State $\widetilde{\mathbf U}_i\gets\operatorname{Norm}_A(\mathbf U_i)$
+\Statex
+\AlgPhase{2. Apply self-attention with pair bias}
+\State $\mathbf q_i^h\gets
+    \operatorname{Norm}_q(W_q^h\widetilde{\mathbf U}_i)$,
+    $\mathbf k_i^h\gets
+    \operatorname{Norm}_k(W_k^h\widetilde{\mathbf U}_i)$,
+    $\mathbf v_i^h\gets W_v^h\widetilde{\mathbf U}_i$
+\State $b_{ij}^h\gets W_P^h
+    \operatorname{Norm}_P(\mathbf P_{ij}^\star)$
+\Statex $\displaystyle
+a_{ij}^h\gets\operatorname{softmax}_{j}\!\left(
+\frac{\langle\mathbf q_i^h,\mathbf k_j^h\rangle}{\sqrt{d_h}}
++b_{ij}^h-\infty(1-m_j)\right)$
+\State $\mathbf o_i^h\gets\sum_j a_{ij}^h\mathbf v_j^h$
+\Statex $\displaystyle
+\mathbf o_i\gets W_o\!\left[
+\sigma(W_g\widetilde{\mathbf U}_i)
+\odot\operatorname{Concat}_h(\mathbf o_i^h)\right]$
+\State $\mathbf S_i\gets
+    \mathbf S_i+\boldsymbol\gamma_A\odot\mathbf o_i$
+\Statex
+\AlgPhase{3. Apply the gated feed-forward update}
+\State $\mathbf H_i\gets
+    (1+\boldsymbol\alpha_F)\odot\operatorname{Norm}_2(\mathbf S_i)
+    +\boldsymbol\beta_F$
+\Statex $\displaystyle
+\mathbf f_i\gets W_{\mathrm{down}}\!\left[
+\phi(W_{\mathrm{gate}}\mathbf H_i)
+\odot W_{\mathrm{up}}\mathbf H_i\right]$
+\State $\mathbf S_i\gets
+    \mathbf S_i+\boldsymbol\gamma_F\odot\mathbf f_i$
+\State \Return $\mathbf S$
+\end{algorithmic}
+\end{algorithm}
+
+\textbf{Prediction heads.} \Cref{alg:prediction-heads} maps the final single representation to centered Cartesian coordinates and a pooled lattice prediction over valid atoms.
+
+\begin{algorithm}[H]
+\caption{Coordinate and lattice prediction heads}
+\label{alg:prediction-heads}
+\begin{algorithmic}[1]
+\Require Final single representation $\mathbf S$ and valid-atom mask $\mathbf m$
+\Ensure Coordinate endpoint $\widehat{\mathbf X}_1$ and lattice endpoint
+$\widehat{\boldsymbol\ell}_1$
+\State $N\gets\sum_i m_i$
+\AlgPhase{1. Predict centered atomic coordinates}
+\State $\mathbf r_i\gets
+    \operatorname{Linear}_X(\operatorname{Norm}_X(\mathbf S_i))$
+\State $\displaystyle
+    \widehat{\mathbf X}_{1,i}\gets\mathbf r_i-
+    \frac{1}{N}\sum_jm_j\mathbf r_j$
+\Statex
+\AlgPhase{2. Pool atom features and predict the lattice}
+\State $\displaystyle
+    \overline{\mathbf s}\gets\frac{1}{N}\sum_i m_i
+    \operatorname{Norm}_L(\mathbf S_i)$
+\State $\widehat{\boldsymbol\ell}_1\gets
+    \operatorname{MLP}_L(\overline{\mathbf s})$
+\State \Return $(\widehat{\mathbf X}_1,\widehat{\boldsymbol\ell}_1)$
+\end{algorithmic}
+\end{algorithm}

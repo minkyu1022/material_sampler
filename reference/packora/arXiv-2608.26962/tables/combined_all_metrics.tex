@@ -1,0 +1,66 @@
+\begin{table}[H]
+\centering
+\caption{\textbf{Full metrics at a 30-candidate budget.}
+We report per-sample collision, packing, and recovery rates
+($\mathrm{Col}_S$, $\mathrm{Pac}_S$, $\mathrm{Rec}_S$) and crystal-level
+packing, recovery, and solve rates
+($\mathrm{Pac}_C$, $\mathrm{Rec}_C$, $\mathrm{Sol}_C$), following the
+definitions in \citet{jin2025oxtal}. Other baselines use their exact
+30-candidate pools, while \model{}-M and \model{}-L report means over 5{,}000
+seeded draws of 30 candidates from their 1{,}000-candidate pools. CLARI is
+omitted because only $\mathrm{Sol}_C$ is available.}
+\label{tab:combined_all_metrics}
+\begin{tabular}{llcccccc}
+\toprule
+Dataset & Method & $\mathrm{Col}_S \downarrow$ & $\mathrm{Pac}_S \uparrow$ &
+$\mathrm{Pac}_C \uparrow$ &
+$\mathrm{Rec}_S \uparrow$ & $\mathrm{Rec}_C \uparrow$ &
+$\mathrm{Sol}_C \uparrow$ \\
+\midrule
+Rigid & A-Transformer & 0.731 & 0.015 & 0.060 & 0.033 & 0.120 & 0.060 \\
+ & AssembleFlow & 0.524 & 0.001 & 0.040 & 0.211 & 0.760 & 0.000 \\
+ & OXtal & 0.011 & 0.873 & 1.000 & 0.737 & 0.960 & 0.300 \\
+\rowcolor{mfTealFill}
+ & \model{}-M & 0.036 & 0.433 & 0.876 & 0.860 & 0.978 & 0.807 \\
+\rowcolor{mfTealFill}
+ & \model{}-L & 0.028 & 0.405 & 0.872 & 0.847 & 0.979 & 0.795 \\
+\midrule
+Flexible & A-Transformer & 0.900 & 0.001 & 0.020 & 0.000 & 0.000 & 0.000 \\
+ & AssembleFlow & 0.883 & 0.000 & 0.000 & 0.021 & 0.140 & 0.000 \\
+ & OXtal & 0.097 & 0.291 & 0.900 & 0.048 & 0.400 & 0.220 \\
+\rowcolor{mfTealFill}
+ & \model{}-M & 0.030 & 0.099 & 0.578 & 0.346 & 0.879 & 0.498 \\
+\rowcolor{mfTealFill}
+ & \model{}-L & 0.031 & 0.099 & 0.605 & 0.371 & 0.920 & 0.530 \\
+\midrule
+CSP5 & A-Transformer & 0.833 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 \\
+ & AssembleFlow & 0.717 & 0.000 & 0.000 & 0.150 & 0.500 & 0.000 \\
+ & OXtal & 0.006 & 0.667 & 0.833 & 0.572 & 0.833 & 0.167 \\
+\rowcolor{mfTealFill}
+ & \model{}-M & 0.023 & 0.251 & 0.808 & 0.784 & 0.915 & 0.732 \\
+\rowcolor{mfTealFill}
+ & \model{}-L & 0.018 & 0.328 & 0.797 & 0.792 & 0.902 & 0.793 \\
+\midrule
+CSP6 & A-Transformer & 0.967 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 \\
+ & AssembleFlow & 0.800 & 0.000 & 0.000 & 0.073 & 0.200 & 0.000 \\
+ & OXtal & 0.013 & 0.660 & 1.000 & 0.160 & 0.600 & 0.200 \\
+\rowcolor{mfTealFill}
+ & \model{}-M & 0.070 & 0.177 & 0.607 & 0.559 & 0.851 & 0.426 \\
+\rowcolor{mfTealFill}
+ & \model{}-L & 0.052 & 0.193 & 0.661 & 0.578 & 0.902 & 0.433 \\
+\midrule
+CSP7 & A-Transformer & 0.950 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 \\
+ & AssembleFlow & 0.808 & 0.000 & 0.000 & 0.063 & 0.250 & 0.000 \\
+ & OXtal & 0.021 & 0.483 & 0.875 & 0.129 & 0.375 & 0.125 \\
+\rowcolor{mfTealFill}
+ & \model{}-M & 0.178 & 0.041 & 0.396 & 0.251 & 0.656 & 0.212 \\
+\rowcolor{mfTealFill}
+ & \model{}-L & 0.174 & 0.035 & 0.469 & 0.278 & 0.681 & 0.238 \\
+\midrule
+\rowcolor{mfTealFill}
+Teaching & \model{}-M & 0.057 & 0.281 & 0.704 & 0.536 & 0.842 & 0.637 \\
+\rowcolor{mfTealFill}
+ & \model{}-L & 0.050 & 0.288 & 0.730 & 0.554 & 0.859 & 0.663 \\
+\bottomrule
+\end{tabular}
+\end{table}

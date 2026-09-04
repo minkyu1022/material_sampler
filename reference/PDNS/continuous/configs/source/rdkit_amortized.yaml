@@ -1,0 +1,7 @@
+_target_: src.utils.chem_utils.CenteredRDKit
+n_systems_per_batch: ${n_systems_per_batch}
+smiles_list:
+  _target_: src.utils.chem_utils.get_smiles_list
+  filepath: ${smiles}
+
+

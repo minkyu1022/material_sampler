@@ -1,0 +1,13 @@
+{
+  "source_files": 990,
+  "source_frames": 376200,
+  "recorded_unique": 19993,
+  "recorded_is_expected_subset": true,
+  "unexpected_ids": [],
+  "duplicate_record_lines": [],
+  "duplicate_count": 0,
+  "malformed_count": 0,
+  "missing_or_empty_artifact_count": 0,
+  "sample_missing": [],
+  "passed": true
+}

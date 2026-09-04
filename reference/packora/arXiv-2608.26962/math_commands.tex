@@ -1,0 +1,47 @@
+% Add custom math commands here.
+
+\definecolor{reviewfg}{HTML}{CC0000}
+\definecolor{mfSlate}{HTML}{5C6470}
+\definecolor{mfSlateFill}{HTML}{E7E9EC}
+\definecolor{mfPurple}{HTML}{9B5FA0}
+\definecolor{mfPurpleFill}{HTML}{F1E5F2}
+\definecolor{mfTeal}{HTML}{3E97A8}
+\definecolor{mfTealFill}{HTML}{DFF1F4}
+\definecolor{mfBlue}{HTML}{3E78C2}
+\definecolor{mfBlueFill}{HTML}{E1EBF7}
+\definecolor{mfOrange}{HTML}{E0902E}
+\definecolor{mfOrangeFill}{HTML}{FAEAD7}
+\definecolor{mfGreen}{HTML}{4FA06A}
+\definecolor{mfGreenFill}{HTML}{E1F0E6}
+\definecolor{mfRose}{HTML}{CC5C5C}
+\definecolor{mfRoseFill}{HTML}{F7E2E2}
+\definecolor{mfGrid}{HTML}{D7DCE2}
+
+% Soft mineral pastel palette for the method overview.
+\definecolor{ovInk}{HTML}{303640}
+\definecolor{ovTextMuted}{HTML}{59636F}
+\definecolor{ovFrame}{HTML}{D6DADF}
+\definecolor{ovGroupFill}{HTML}{FAFAF8}
+\definecolor{ovInputLine}{HTML}{687C8E}
+\definecolor{ovInputFill}{HTML}{E5EDF3}
+\definecolor{ovTemplateLine}{HTML}{64866A}
+\definecolor{ovTemplateFill}{HTML}{DDEBDD}
+\definecolor{ovStereoLine}{HTML}{687EA5}
+\definecolor{ovStereoFill}{HTML}{DFE6F4}
+\definecolor{ovSpaceLine}{HTML}{AD7645}
+\definecolor{ovSpaceFill}{HTML}{F6E1C9}
+\definecolor{ovModelLine}{HTML}{846590}
+\definecolor{ovModelFill}{HTML}{EADFF0}
+
+\newcommand{\capsupported}{\textcolor{mfGreen}{\ding{51}}}
+\newcommand{\capunsupported}{\textcolor{mfRose}{\ding{55}}}
+\newcommand{\caprequired}{\textcolor{mfOrange}{\ensuremath{\blacktriangle}}}
+
+\DeclareRobustCommand{\ours}{\textnormal{\textsc{Packora}}}
+\DeclareRobustCommand{\model}{\ours}
+
+\newcommand{\review}[1]{%
+  \begingroup
+  \textcolor{reviewfg}{#1}%
+  \endgroup
+}

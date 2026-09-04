@@ -1,0 +1,11 @@
+_target_: src.energies.lennardjones_energy.LennardJonesEnergy
+name: lj55
+dim: ${dim}
+n_particles: ${n_particles}
+data_path: "data/test_split_LJ55-1000-part1.npy"
+data_path_train: "data/train_split_LJ55-1000-part1.npy"
+data_path_val: "data/val_split_LJ55-1000-part1.npy"
+data_path_test: "data/test_split_LJ55-1000-part1.npy"
+plot_samples_epoch_period: 1
+data_normalization_factor: 1.0
+is_molecule: True

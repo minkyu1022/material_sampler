@@ -1,0 +1,5 @@
+_target_: src.energies.dist_energy.DistEnergy
+
+dist:
+  _target_: src.energies.dist_utils.Rings
+  dim: ${dim}

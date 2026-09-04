@@ -1,0 +1,58 @@
+# ephemeral python files
+__pycache__
+.venv
+*.pyc
+
+# package install files
+build/
+dist/
+*.egg-info
+
+# logging
+*.log
+*log.txt
+
+# model checkpoints
+*.model
+
+# docs
+docs_build/
+docs/reference/torch_sim.*
+
+# ipynb files
+*.ipynb
+!docs/tutorials/integrator_tests_analysis.ipynb
+
+# ignore trajectory files
+*.h5
+*.h5md
+*.hdf5
+*.traj
+
+# ignore torch.save outputs
+*.pt
+
+# coverage
+coverage.xml
+.coverage*
+
+# test cache (compiled models, etc.)
+tests/.cache/
+
+# physical validation data and plots
+tests/physical_validation_data/
+
+# env
+uv.lock
+
+# IDE
+.vscode/
+
+# duecredit
+.duecredit.p
+
+# agents
+.agents/
+
+# treemap html file
+docs/_static/torch-sim-pkg-treemap.html

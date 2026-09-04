@@ -1,0 +1,16 @@
+numpy<2
+torch
+lightning
+pytorch-lightning
+hydra-core
+omegaconf
+mdtraj
+ase
+scipy
+tqdm
+wandb
+matplotlib
+deeptime
+POT
+# Target densities, reference data, and evaluation metrics (requires OpenMM).
+boltzkit @ git+https://github.com/ChristophervonKlitzing/boltzkit

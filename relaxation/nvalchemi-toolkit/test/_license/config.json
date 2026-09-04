@@ -1,0 +1,18 @@
+{
+    "copyright_file": "header.txt",
+    "dir": "../../",
+    "exclude-dir": [
+        "../../build/",
+        "../../docs/",
+        "../../.venv/",
+        "../../.git/",
+        "../../.github/",
+        "../../.vscode/",
+        "../../.pytest_cache/",
+        "../../.mypy_cache/",
+        "../../nvalchemi/distributed/_core/_upstream/"
+      ],
+    "include-ext": [
+        ".py"
+    ]
+  }

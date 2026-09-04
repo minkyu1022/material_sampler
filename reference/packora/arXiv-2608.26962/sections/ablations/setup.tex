@@ -1,0 +1,27 @@
+\subsection{Ablation Protocol}
+\label{sec:ablations-setup}
+
+\textbf{Dataset preprocessing.}
+Following OXtal~\citep{jin2025oxtal}, we construct the dataset from CSD entries
+deposited by May 1, 2025. We require three-dimensional coordinates, an
+$R$-factor of at most $9\%$, single-crystal X-ray diffraction at ambient
+pressure, a non-polymeric structure, and a known space group. We add missing
+hydrogens using the CSD API~\citep{sykes2024scripting} and retain unit cells
+with at most 512 atoms, including hydrogens. To prevent benchmark leakage, we
+remove all entries belonging to a test CSD family or containing an eligible
+CSD-provided component SMILES found in the test sets. Within each remaining CSD
+family, we deduplicate equivalent structures using pymatgen
+StructureMatcher~\citep{ong2013pymatgen} with $\operatorname{ltol}=0.2$,
+$\operatorname{stol}=0.3$, and $\operatorname{angle\_tol}=5^\circ$, retaining the entry
+with the lowest $R$-factor. The complete preprocessing pipeline and dataset
+statistics are provided in \Cref{app:dataset-preprocessing}.
+
+\textbf{Setup.}
+To make controlled ablations feasible under a fixed compute budget, we train each
+configuration for 300 epochs on structures with at most 300 atoms per unit cell,
+saving checkpoints every 50 epochs. We evaluate each checkpoint on a fixed subset
+of 8{,}192 validation crystals, generating 30 candidates per target with the
+200-step EDM--Heun sampler, and report $\mathrm{Sol}_C$ as defined in
+\Cref{sec:structure-generation}. Architecture, training, conditioning, and scaling
+studies follow this protocol; inference studies instead vary the sampler and
+function-evaluation budget. Within each study, we vary one design choice at a time.

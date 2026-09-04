@@ -1,0 +1,313 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "nvalchemi-toolkit"
+authors = [
+  { name="NVIDIA ALCHEMI Team"},
+]
+description = "High-performance open-source deep-learning framework for exploring, building and deploying AI atomic simulation workflows."
+readme = "README.md"
+requires-python = ">=3.11,<3.14"
+license = {file="LICENSE"}
+dependencies = [
+    "nvalchemi-toolkit-ops>=0.4.1",
+    "torch>=2.8",
+    "click",
+    "loguru",
+    "numpy<2.4",
+    "jaxtyping>=0.3.2",
+    "tensordict>=0.11.0",
+    "pydantic>=2.11.7",
+    "dm-tree>=0.1.8",
+    "plum-dispatch>=2.5.7",
+    "zarr>=3",
+    "periodictable==2.0.2",
+    "rich>=13.0.0",
+    "plotext",
+    "nvidia-physicsnemo>=2.2.0",
+]
+keywords = [
+    "machine learning",
+    "molecular dynamics",
+    "atomic simulation",
+    "deep learning",
+    "GPU",
+    "CUDA",
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+    "Intended Audience :: Science/Research",
+    "Environment :: GPU",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dynamic = ["version"]
+
+[tool.hatch.version]
+path = "nvalchemi/__init__.py"
+
+[tool.hatch.build.targets.sdist]
+include = ["nvalchemi/**/*.py"]
+
+[project.scripts]
+nvalchemi-io-test = "nvalchemi.data.io_test:main"
+nvalchemi-training = "nvalchemi.training.cli:main"
+
+[project.urls]
+
+# these are intended to be user-facing
+[project.optional-dependencies]
+aimnet = [
+    "aimnet"
+]
+ase = [
+    "ase>=3.27.0",
+]
+cu12 = [
+    "nvalchemi-toolkit-ops[torch-cu12]>=0.4.1; sys_platform != 'darwin'",
+    "nvidia-physicsnemo[cu12]>=2.2.0; sys_platform != 'darwin'",
+    "cuml-cu12>=25.6.0; sys_platform != 'darwin'",
+    "torch; sys_platform != 'darwin'",
+    "torchvision; sys_platform != 'darwin'",
+    "cuequivariance-ops-torch-cu12>=0.8.0; sys_platform != 'darwin'",
+]
+cu13 = [
+    "nvalchemi-toolkit-ops[torch-cu13]>=0.4.1; sys_platform != 'darwin'",
+    "nvidia-physicsnemo[cu13]>=2.2.0; sys_platform != 'darwin'",
+    "cuml-cu13>=25.6.0; sys_platform != 'darwin'",
+    "torch; sys_platform != 'darwin'",
+    "torchvision; sys_platform != 'darwin'",
+    "cuequivariance-ops-torch-cu13>=0.8.0; sys_platform != 'darwin'",
+]
+pymatgen = [
+    "pymatgen>=2025.10.7",
+]
+mace = [
+    "cuequivariance-torch>=0.8.0",
+    "mace-torch==0.3.15",
+]
+tensorboard = [
+    "tensorboard",
+]
+uma = [
+    "fairchem-core>=2.0.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["nvalchemi"]
+
+# === UV configuration ====
+[tool.uv]
+default-groups = ["dev", "build"]
+# torch/torchvision resolve from the explicit PyTorch CUDA indexes while their
+# dependencies come from PyPI; unsafe-best-match lets uv pick the best version
+# across indexes rather than stopping at the first that has the name.
+index-strategy = "unsafe-best-match"
+conflicts = [
+  [
+    { extra = "cu12" },
+    { extra = "cu13" },
+  ],
+  # UMA's fairchem-core caps torch <2.9; the cuXX extras floor it at >=2.11
+  # (via toolkit-ops), so UMA forks a separate env (`uv sync --extra uma`).
+  [
+    { extra = "cu12" },
+    { extra = "uma" },
+  ],
+  [
+    { extra = "cu13" },
+    { extra = "uma" },
+  ],
+  # MACE 0.3.15 pins e3nn==0.4.4; fairchem-core (UMA) needs e3nn>=0.5 —
+  # mutually exclusive, so install one extra per environment.
+  [
+    { extra = "mace" },
+    { extra = "uma" },
+  ],
+]
+override-dependencies = [
+  "python-hostlist; sys_platform == 'never'"
+]
+dependency-metadata = [
+  { name = "nvalchemi-toolkit-ops", version = "0.4.1", requires-dist = [
+    "warp-lang >= 1.13.0",
+    "numpy",
+    "torch>=2.8.0 ; extra == 'torch'",
+    "torch>=2.8.0 ; extra == 'torch-cu12'",
+    "torch>=2.8.0 ; extra == 'torch-cu13'",
+  ], provides-extras = ["torch", "torch-cu12", "torch-cu13"] },
+]
+
+[tool.uv.sources]
+torch = [
+  { index = "pytorch-cu126", extra = "cu12", marker = "sys_platform != 'darwin'" },
+  { index = "pytorch-cu130", extra = "cu13", marker = "sys_platform != 'darwin'" },
+]
+torchvision = [
+  { index = "pytorch-cu126", extra = "cu12", marker = "sys_platform != 'darwin'" },
+  { index = "pytorch-cu130", extra = "cu13", marker = "sys_platform != 'darwin'" },
+]
+
+# these are intended to be developer facing
+[dependency-groups]
+build = [
+    "ninja>=1.11.1.4",
+    # setuptools 81 dropped pkg_resources, which fairchem-core's torchtnt
+    # imports at load — pin <81 so the UMA stack imports.
+    "setuptools>=70.0.0,<81",
+]
+dev = [
+    "pre-commit",
+    "pytest>=6.0.0",
+    "pytest-timeout>=2.0.1",
+    "pytest-skip-slow>=0.0.5",
+    "pytest-asyncio>=0.25.3",
+    "pytest-dependency>=0.6.0",
+    "pyyaml>=6.0",
+    "black==22.10.0",
+    "interrogate==1.5.0",
+    "coverage>=7.2.0",
+    "pytest-cov>=7.0.0",
+    "ruff==0.11.13",
+    "nvtx",
+    "hypothesis>=6.135.10",
+    "hypothesis-torch>=1.0.11",
+    "rdkit>=2025.3.3",
+    "pytest-dependency>=0.6.0",
+    "pytest-testmon>=2.2.0",
+]
+distribution = [
+  "pyarmor==9.1.8",
+  "build==1.2.2",
+  "twine>=4.0.0",
+]
+docs = [
+    "sphinx-design",
+    "sphinx>=6.0.0",
+    "jupytext>=1.15.0",
+    "autodoc-pydantic>=2.0.0",
+    "sphinx-autodoc-typehints>=1.24.0",
+    "sphinx-gallery>=0.12.0",
+    "sphinx-togglebutton>=0.3.0",
+    "myst-parser>=0.18.0",
+    "sphinx-favicon>=1.0.1",
+    "pydata-sphinx-theme==0.15.2",
+    "python-dotenv==1.1.1"
+]
+
+[tool.setuptools.packages.find]
+include = ["nvalchemi", "nvalchemi.*"]
+
+[[tool.uv.index]]
+name = "pytorch-cu126"
+url = "https://download.pytorch.org/whl/cu126"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-cu130"
+url = "https://download.pytorch.org/whl/cu130"
+explicit = true
+
+[tool.ruff]
+exclude = [".licenses/", ".ci/", ".github/", ".git/", "build/", "dist/", "nvalchemi/distributed/_core/_upstream/"]
+# force-exclude so pre-commit (which passes explicit file paths) still skips the
+# vendored _upstream copy.
+force-exclude = true
+
+[tool.ruff.lint]
+# Enable flake8/pycodestyle (`E`), Pyflakes (`F`), flake8-bandit (`S`),
+# isort (`I`), and performance 'PERF' rules.
+select = ["E", "F", "S", "I", "PERF"]
+fixable = ["I"]
+
+# Never enforce `E402`, `E501` (line length violations),
+# and `S311` (random number generators)
+ignore = ["E501", "S311", "F722", "F821"]
+
+[tool.ruff.lint.per-file-ignores]
+# Ignore `F401` (import violations) in all `__init__.py` files, and in `docs/*.py`.
+"__init__.py" = ["F401"]
+"docs/*.py" = ["F401"]
+"examples/*.py" = ["E402", "S101"]
+# Benchmarks insert the suite dir on sys.path before importing it (E402) and
+# use asserts as sanity gates (S101) — same policy as examples/tests.
+"benchmark/**/*.py" = ["E402", "S101"]
+
+# Ignore `S101` (assertions) in all `test` files.
+"test/*.py" = ["S101"]
+
+[tool.pytest.ini_options]
+testpaths = ["test"]
+norecursedirs = [".git", "third_party"]
+# Make the shared distributed-test helpers importable from any subfolder
+# (test/distributed/{_core,validate,model}/…) via ``from _helpers import …`` /
+# ``from _toy_gnn import …``. conftest *fixtures* auto-apply to subdirs; the
+# module-level helper classes need test/distributed on the path.
+pythonpath = ["test/distributed"]
+# show extra info on xfailed, xpassed, and skipped tests
+addopts = ["-vv", "-r", "xfXs"]
+markers = [
+    "slow: marks tests as slow (deselect with: -m 'not slow')",
+    "cli: marks tests which run CLIs",
+    "multigpu: marks tests that require >=2 CUDA GPUs (auto-skipped otherwise)",
+    "requires_cueq: marks tests needing registered cuequivariance torch ops (auto-skipped otherwise)",
+    "requires_uma: marks tests needing fairchem-core / UMA (auto-skipped otherwise)"
+]
+asyncio_mode = "auto"
+
+# ==== Coverage.py configuration (ran using pytest-cov) ====
+# See: https://coverage.readthedocs.io/en/latest/config.html
+[tool.coverage.run]
+branch = false
+concurrency = ["multiprocessing", "thread"]
+source = ["nvalchemi"]
+omit = [
+    "third_party/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+]
+exclude_also = [
+    # Don't complain about abstract methods, they aren't run:
+    "@(abc\\.)?abstractmethod",
+    # Don't complain about protocols:
+    "@runtime_checkable",
+    # Don't complain about compiled code.
+    "@wp.kernel",
+    "@wp.func",
+    "@torch.jit.script",
+]
+omit = [
+    # omit anything in a .local directory anywhere
+    "test/*",
+]
+show_missing = true
+fail_under = 75
+# Warn instead of aborting on missing source files (e.g. stale cached
+# baseline referencing files deleted in the current PR).
+ignore_errors = true
+
+[tool.coverage.xml]
+output = "nvalchemi.coverage.xml"
+
+[tool.interrogate]
+ignore-init-method = true
+ignore-init-module = true
+ignore-magic = true
+ignore-semiprivate = true
+ignore-private = true
+ignore-property-decorators = true
+ignore-module = true
+ignore-nested-functions = true
+ignore-nested-classes = true
+fail-under = 95
+color = true
+omit-covered-files = false
+verbose = 2
+exclude = ["setup.py", "test/*", "docs", "build", "examples", "nvalchemi/distributed/_core/_upstream"]
+ignore-regex = ["^get$", "^mock_.*", ".*BaseClass.*"]

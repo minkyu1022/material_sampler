@@ -1,0 +1,3 @@
+_target_: src.components.scheduler.BaseScheduler
+fix_gamma: ${fix_gamma}
+epsilon: ${epsilon}

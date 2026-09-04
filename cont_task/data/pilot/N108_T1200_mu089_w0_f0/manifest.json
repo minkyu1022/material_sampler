@@ -1,0 +1,71 @@
+{
+  "created_utc": "2026-09-03T16:05:44.413675+00:00",
+  "input": "/home/spml_minkyu_kim/joint_sampler/reference/JANUS/janus_reproduce/outputs/cuni_reference_n108_full/N108_T1200.00_mu00.8900_walker0.npz",
+  "input_sha256": "913560d890aa760f9584e75045bce078d8ca35c4095b8ffd0c0d6fe270847954",
+  "potential": "/home/spml_minkyu_kim/joint_sampler/reference/JANUS/janus_reproduce/potentials/cu_ni/Cu_Ni_Fischer_2018.eam.alloy",
+  "potential_sha256": "ee585bf9884a4ac2548abb395e81a12a941505983aaa058ef546929df74cf240",
+  "source_metadata": {
+    "schema": "janus-cuni-reference-v1",
+    "n_atoms": 108,
+    "temperature_K": 1200.0,
+    "delta_mu_Cu_minus_Ni_eV": 0.89,
+    "walker": 0,
+    "initial_phase": "all-Ni",
+    "total_sweeps": 40000,
+    "burn_in": 2000,
+    "production_start": 2000,
+    "config_stride": 100,
+    "config": {
+      "total_sweeps": 40000,
+      "burn_in": 2000,
+      "config_thin": 100,
+      "species_moves": 6,
+      "displacement_step": 0.0009622504486493762,
+      "log_volume_step": 0.0028867513459481286,
+      "adapt_interval": 50,
+      "target_acceptance": 0.3,
+      "pressure": 0.0,
+      "checkpoint_interval": 500,
+      "seed": 2026
+    },
+    "proposal_temperature_scaling": "sqrt(T/Tmax), Tmax=1200 K",
+    "final_displacement_step": 0.0010849346872419119,
+    "final_log_volume_step": 0.03809685260057449,
+    "production_acceptance": {
+      "displacement": 0.3512105345726013,
+      "volume": 0.3050000071525574,
+      "species": 0.5919386148452759
+    },
+    "production_accepted": {
+      "displacement": 13346,
+      "volume": 11590,
+      "species": 134962
+    },
+    "production_attempts": {
+      "displacement": 38000,
+      "volume": 38000,
+      "species": 228000
+    },
+    "potential": "/home/spml_minkyu_kim/joint_sampler/janus_reproduce/potentials/cu_ni/Cu_Ni_Fischer_2018.eam.alloy",
+    "dtype": "torch.float32"
+  },
+  "frame": 0,
+  "n_atoms": 108,
+  "n_cu": 30,
+  "optimizer": "ase.optimize.BFGS",
+  "cell_filter": "ase.filters.FrechetCellFilter",
+  "full_cell_dof": true,
+  "scalar_pressure_eV_A3": 0.0,
+  "fmax_eV_A": 0.01,
+  "max_steps": 500,
+  "maxstep": 0.1,
+  "optimizer_steps": 76,
+  "converged": true,
+  "initial_energy_eV": -432.48468556189573,
+  "final_energy_eV": -450.6667802960277,
+  "final_max_force_eV_A": 0.009999298312782784,
+  "final_max_abs_stress_eV_A3": 0.00032608768217773034,
+  "initial_volume_A3": 1313.680171265925,
+  "final_volume_A3": 1221.575414797087,
+  "species_coordinate_order_preserved": true
+}

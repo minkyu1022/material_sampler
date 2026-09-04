@@ -1,0 +1,1649 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+"""Tests for MACEWrapper.
+
+All tests in this module require ``mace-torch`` and are automatically skipped
+when it is not installed.  Install with::
+
+    pip install 'nvalchemi-toolkit[mace]'
+"""
+
+from __future__ import annotations
+
+import json
+from types import SimpleNamespace
+
+import pytest
+import torch
+
+# Skip the entire module when mace-torch is not installed.
+pytest.importorskip("mace", reason="mace-torch not installed; skipping MACE tests")
+
+from nvalchemi.data import AtomicData, Batch  # noqa: E402
+from nvalchemi.models.base import NeighborListFormat  # noqa: E402
+from nvalchemi.models.mace import MACEWrapper  # noqa: E402
+from nvalchemi.training import (  # noqa: E402
+    EnergyMSELoss,
+    FineTuningStrategy,
+    ForceMSELoss,
+    ValidationConfig,
+)
+from nvalchemi.training._stages import TrainingStage  # noqa: E402
+from nvalchemi.training.hooks import EMAHook  # noqa: E402
+from nvalchemi.training.optimizers import OptimizerConfig  # noqa: E402
+from nvalchemi.training.strategy import (  # noqa: E402
+    TrainingStrategy,
+    default_training_fn,
+)
+
+# ---------------------------------------------------------------------------
+# Shared constants
+# ---------------------------------------------------------------------------
+
+_ATOMIC_NUMBERS = [1, 6, 8]  # H, C, O
+_CUTOFF = 5.0
+_HIDDEN_DIM = 32
+
+
+# ---------------------------------------------------------------------------
+# Mock MACE model
+# ---------------------------------------------------------------------------
+
+
+# Module-level classes so torch.save (pickle) can locate them by name.
+class _MockIrrepsOut:
+    dim = _HIDDEN_DIM
+
+
+class _MockLinear:
+    irreps_out = _MockIrrepsOut()
+
+
+class _MockProduct:
+    linear = _MockLinear()
+
+
+class MockMACEModel(torch.nn.Module):
+    """Minimal MACE-like model for unit tests.
+
+    Replicates the attribute structure that ``MACEWrapper.__init__`` and
+    ``embedding_shapes`` probe, and implements a differentiable
+    ``forward`` so conservative-force tests work without a real checkpoint.
+
+    Energy is defined as the sum of per-atom position L2 norms, which gives
+    an analytic gradient: ``force_i = -pos_i / |pos_i|``.
+    """
+
+    def __init__(
+        self,
+        numbers: list[int] = _ATOMIC_NUMBERS,
+        r_max: float = _CUTOFF,
+        hidden_dim: int = _HIDDEN_DIM,
+    ) -> None:
+        super().__init__()
+        self.atomic_numbers = torch.tensor(numbers, dtype=torch.long)
+        self.r_max = torch.tensor(r_max)
+
+        # Replicate the attribute path MACEWrapper.embedding_shapes probes:
+        #   model.products[0].linear.irreps_out.dim
+        self.products = [_MockProduct()]
+
+        # Real parameter so _model_dtype works (next(model.parameters()).dtype).
+        self._param = torch.nn.Linear(1, hidden_dim, bias=False)
+        self._param.weight.data.fill_(1.0)
+        self._hidden_dim = hidden_dim
+        self.training_flags: list[bool] = []
+
+    def forward(
+        self,
+        data_dict: dict,
+        *,
+        compute_force: bool = True,
+        compute_stress: bool = False,
+        compute_displacement: bool = False,
+        training: bool = False,
+    ) -> dict:
+        self.training_flags.append(training)
+        positions = data_dict["positions"]  # [N, 3]
+        batch = data_dict["batch"].long()  # [N]
+        N = positions.shape[0]
+        B = int(batch.max().item()) + 1 if N > 0 else 1
+
+        # Energy = sum of per-atom position norms, scaled by a parameter, and then grouped by graph.
+        # Avoids zero-norm issues by clamping from below.
+        norms = positions.pow(2).sum(dim=-1).clamp(min=1e-8).sqrt()  # [N]
+        norms = norms * self._param.weight[0, 0]
+        energy = torch.zeros(B, dtype=positions.dtype, device=positions.device)
+        energy.scatter_add_(0, batch, norms)
+
+        node_feats = torch.zeros(
+            N, self._hidden_dim, dtype=positions.dtype, device=positions.device
+        )
+
+        result: dict = {"energy": energy, "node_feats": node_feats}
+
+        if compute_force:
+            (grad,) = torch.autograd.grad(
+                energy.sum(),
+                positions,
+                create_graph=training,
+                retain_graph=True,
+                allow_unused=True,
+            )
+            # MACE convention: forces = -dE/dr (negative gradient).
+            result["forces"] = (
+                -grad if grad is not None else torch.zeros_like(positions)
+            )
+
+        if compute_stress:
+            result["stress"] = torch.zeros(
+                B, 3, 3, dtype=positions.dtype, device=positions.device
+            )
+
+        return result
+
+
+class TrainableMockMACEModel(torch.nn.Module):
+    """Minimal trainable MACE-like model for fine-tuning workflow tests."""
+
+    def __init__(
+        self,
+        numbers: list[int] = _ATOMIC_NUMBERS,
+        r_max: float = _CUTOFF,
+        hidden_dim: int = _HIDDEN_DIM,
+    ) -> None:
+        super().__init__()
+        self.atomic_numbers = torch.tensor(numbers, dtype=torch.long)
+        self.r_max = torch.tensor(r_max)
+        self.products = [_MockProduct()]
+        self.scale = torch.nn.Parameter(torch.tensor(1.0))
+        self._hidden_dim = hidden_dim
+        self.training_flags: list[bool] = []
+
+    def forward(
+        self,
+        data_dict: dict,
+        *,
+        compute_force: bool = True,
+        compute_stress: bool = False,
+        compute_displacement: bool = False,
+        training: bool = False,
+    ) -> dict:
+        del compute_stress, compute_displacement
+        self.training_flags.append(training)
+        positions = data_dict["positions"]
+        batch = data_dict["batch"].long()
+        num_graphs = int(batch.max().item()) + 1
+
+        node_energy = self.scale * positions.pow(2).sum(dim=-1)
+        energy = torch.zeros(num_graphs, dtype=positions.dtype, device=positions.device)
+        energy.scatter_add_(0, batch, node_energy)
+        node_feats = torch.zeros(
+            positions.shape[0],
+            self._hidden_dim,
+            dtype=positions.dtype,
+            device=positions.device,
+        )
+        node_feats[:, 0] = self.scale * positions[:, 0]
+
+        result: dict = {"energy": energy, "node_feats": node_feats}
+
+        if compute_force:
+            (grad,) = torch.autograd.grad(
+                energy.sum(),
+                positions,
+                create_graph=training,
+                retain_graph=True,
+            )
+            result["forces"] = -grad
+
+        return result
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def _make_water(device: str = "cpu") -> AtomicData:
+    """Single H2O molecule with a pre-computed full edge list (no PBC)."""
+    # O at origin, H1 along x, H2 along y — all pairs within 5 Å cutoff.
+    positions = torch.tensor(
+        [[0.0, 0.0, 0.0], [0.96, 0.0, 0.0], [0.0, 0.96, 0.0]],
+        dtype=torch.float32,
+        device=device,
+    )
+    numbers = torch.tensor([8, 1, 1], dtype=torch.long, device=device)
+    neighbor_list = torch.tensor(
+        [[0, 1], [1, 0], [0, 2], [2, 0], [1, 2], [2, 1]],
+        dtype=torch.long,
+        device=device,
+    )
+    return AtomicData(
+        positions=positions, atomic_numbers=numbers, neighbor_list=neighbor_list
+    )
+
+
+def _make_single_atom(device: str = "cpu") -> AtomicData:
+    """Single H atom at (0.5, 0, 0) with no edges — used for analytic force check."""
+    positions = torch.tensor([[0.5, 0.0, 0.0]], dtype=torch.float32, device=device)
+    numbers = torch.tensor([1], dtype=torch.long, device=device)
+    neighbor_list = torch.zeros(0, 2, dtype=torch.long, device=device)
+    return AtomicData(
+        positions=positions, atomic_numbers=numbers, neighbor_list=neighbor_list
+    )
+
+
+def _make_ema_ctx(
+    model: torch.nn.Module,
+    *,
+    step_count: int,
+) -> SimpleNamespace:
+    """Build the minimal TrainContext surface EMAHook reads."""
+    return SimpleNamespace(
+        models={"main": model},
+        step_count=step_count,
+        loss=None,
+        workflow=object(),
+    )
+
+
+def _make_pbc_water(device: str = "cpu") -> AtomicData:
+    """H2O in a periodic cubic box with integer neighbor_list_shifts on edges."""
+    positions = torch.tensor(
+        [[0.0, 0.0, 0.0], [0.96, 0.0, 0.0], [0.0, 0.96, 0.0]],
+        dtype=torch.float32,
+        device=device,
+    )
+    numbers = torch.tensor([8, 1, 1], dtype=torch.long, device=device)
+    neighbor_list = torch.tensor(
+        [[0, 1], [1, 0], [0, 2], [2, 0], [1, 2], [2, 1]],
+        dtype=torch.long,
+        device=device,
+    )
+    # Cubic 10 Å cell; edges are all within the same image, so neighbor_list_shifts are zero.
+    # AtomicData expects cell as [B, 3, 3] and pbc as [B, 3].
+    cell = (torch.eye(3, dtype=torch.float32, device=device) * 10.0).unsqueeze(
+        0
+    )  # [1, 3, 3]
+    neighbor_list_shifts = torch.zeros(6, 3, dtype=torch.float32, device=device)
+    pbc = torch.tensor([[True, True, True]], device=device)  # [1, 3]
+    return AtomicData(
+        positions=positions,
+        atomic_numbers=numbers,
+        neighbor_list=neighbor_list,
+        cell=cell,
+        neighbor_list_shifts=neighbor_list_shifts,
+        pbc=pbc,
+    )
+
+
+def _make_finetune_batch(device: str = "cpu") -> Batch:
+    """Small labelled system for end-to-end MACE fine-tuning tests."""
+    data = AtomicData(
+        positions=torch.tensor(
+            [[1.0, 0.0, 0.0], [0.5, 0.0, 0.0]],
+            dtype=torch.float32,
+            device=device,
+        ),
+        atomic_numbers=torch.tensor([8, 1], dtype=torch.long, device=device),
+        neighbor_list=torch.tensor([[0, 1], [1, 0]], dtype=torch.long, device=device),
+        energy=torch.zeros(1, 1, dtype=torch.float32, device=device),
+        forces=torch.zeros(2, 3, dtype=torch.float32, device=device),
+    )
+    return Batch.from_data_list([data])
+
+
+def _optimizer_param_ids(strategy: TrainingStrategy) -> set[int]:
+    """Return ids of every parameter present in strategy optimizers."""
+    return {
+        id(param)
+        for optimizer in strategy._optimizers
+        for group in optimizer.param_groups
+        for param in group["params"]
+    }
+
+
+# ---------------------------------------------------------------------------
+# Fixtures
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def mock_model() -> MockMACEModel:
+    return MockMACEModel()
+
+
+@pytest.fixture
+def wrapper(mock_model) -> MACEWrapper:
+    return MACEWrapper(mock_model)
+
+
+@pytest.fixture
+def single_batch() -> Batch:
+    return Batch.from_data_list([_make_water()])
+
+
+@pytest.fixture
+def multi_batch() -> Batch:
+    """Two H2O molecules as a batched system (B=2, N=6)."""
+    return Batch.from_data_list([_make_water(), _make_water()])
+
+
+@pytest.fixture
+def pbc_batch() -> Batch:
+    return Batch.from_data_list([_make_pbc_water()])
+
+
+# ---------------------------------------------------------------------------
+# Instantiation
+# ---------------------------------------------------------------------------
+
+
+class TestInstantiation:
+    def test_wraps_model(self, mock_model):
+        w = MACEWrapper(mock_model)
+        assert w.model is mock_model
+
+    def test_default_model_config(self, wrapper):
+        assert "forces" in wrapper.model_config.active_outputs
+        assert "stress" not in wrapper.model_config.active_outputs
+
+    def test_node_emb_buffer_shape(self, wrapper):
+        # [max_z + 1, num_elements] = [9, 3] for atomic_numbers=[1, 6, 8]
+        assert wrapper._node_emb.shape == (9, 3)
+
+    def test_node_emb_not_in_state_dict(self, wrapper):
+        assert "_node_emb" not in wrapper.state_dict()
+
+    def test_import_error_without_mace(self, mock_model, monkeypatch):
+        from nvalchemi._optional import OptionalDependency
+
+        monkeypatch.setattr(OptionalDependency.MACE, "_available", False)
+        with pytest.raises(ImportError):
+            MACEWrapper(mock_model)
+
+
+# ---------------------------------------------------------------------------
+# ModelConfig capability checks
+# ---------------------------------------------------------------------------
+
+
+class TestModelConfigCapabilities:
+    def test_forces_via_autograd(self, wrapper):
+        assert "forces" in wrapper.model_config.autograd_outputs
+
+    def test_outputs_include_energies_forces_stresses(self, wrapper):
+        cfg = wrapper.model_config
+        assert "energy" in cfg.outputs
+        assert "forces" in cfg.outputs
+        assert "stress" in cfg.outputs
+
+    def test_autograd_inputs(self, wrapper):
+        assert "positions" in wrapper.model_config.autograd_inputs
+
+    def test_supports_pbc(self, wrapper):
+        assert wrapper.model_config.supports_pbc is True
+
+    def test_embedding_shapes_available(self, wrapper):
+        shapes = wrapper.embedding_shapes
+        assert "node_embeddings" in shapes
+        assert "graph_embeddings" in shapes
+
+    def test_neighbor_config_coo(self, wrapper):
+        nc = wrapper.model_config.neighbor_config
+        assert nc is not None
+        assert nc.format == NeighborListFormat.COO
+        assert nc.cutoff == pytest.approx(_CUTOFF)
+
+    def test_needs_pbc_false(self, wrapper):
+        assert wrapper.model_config.needs_pbc is False
+
+
+# ---------------------------------------------------------------------------
+# Properties
+# ---------------------------------------------------------------------------
+
+
+class TestProperties:
+    def test_cutoff_from_tensor_r_max(self, wrapper):
+        assert wrapper.cutoff == pytest.approx(_CUTOFF)
+        assert isinstance(wrapper.cutoff, float)
+
+    def test_cutoff_from_scalar_r_max(self, mock_model):
+        mock_model.r_max = 6.0
+        w = MACEWrapper(mock_model)
+        assert w.cutoff == pytest.approx(6.0)
+
+    def test_embedding_shapes(self, wrapper):
+        shapes = wrapper.embedding_shapes
+        assert shapes["node_embeddings"] == (_HIDDEN_DIM,)
+        assert shapes["graph_embeddings"] == (_HIDDEN_DIM,)
+
+    def test_model_dtype(self, wrapper):
+        assert wrapper._model_dtype == torch.float32
+
+
+# ---------------------------------------------------------------------------
+# Node attribute encoding
+# ---------------------------------------------------------------------------
+
+
+class TestNodeAttrs:
+    def test_one_hot_correctness(self, wrapper, single_batch):
+        # Atomic numbers for H2O are [8, 1, 1].
+        # z_table = [1, 6, 8] → indices [2, 0, 0]
+        node_attrs = wrapper._node_attrs(single_batch)
+        assert node_attrs.shape == (3, 3)  # 3 atoms, 3 element types
+        # O (atomic_number=8) → index 2 in z_table → one-hot [0, 0, 1]
+        assert node_attrs[0].tolist() == pytest.approx([0.0, 0.0, 1.0])
+        # H (atomic_number=1) → index 0 in z_table → one-hot [1, 0, 0]
+        assert node_attrs[1].tolist() == pytest.approx([1.0, 0.0, 0.0])
+        assert node_attrs[2].tolist() == pytest.approx([1.0, 0.0, 0.0])
+
+    def test_dtype_matches_model(self, wrapper, single_batch):
+        node_attrs = wrapper._node_attrs(single_batch)
+        assert node_attrs.dtype == wrapper._model_dtype
+
+    def test_device_matches_batch(self, wrapper, single_batch):
+        node_attrs = wrapper._node_attrs(single_batch)
+        assert node_attrs.device == single_batch.positions.device
+
+
+# ---------------------------------------------------------------------------
+# adapt_input
+# ---------------------------------------------------------------------------
+
+
+class TestAdaptInput:
+    def test_required_keys_present(self, wrapper, single_batch):
+        inp = wrapper.adapt_input(single_batch)
+        for key in (
+            "positions",
+            "node_attrs",
+            "batch",
+            "ptr",
+            "edge_index",
+            "neighbor_list_shifts",
+            "shifts",
+            "cell",
+        ):
+            assert key in inp, f"Missing key: {key}"
+
+    def test_positions_dtype(self, wrapper, single_batch):
+        inp = wrapper.adapt_input(single_batch)
+        assert inp["positions"].dtype == wrapper._model_dtype
+
+    def test_topology_tensors_are_long(self, wrapper, single_batch):
+        inp = wrapper.adapt_input(single_batch)
+        assert inp["edge_index"].dtype == torch.long
+        assert inp["batch"].dtype == torch.long
+        assert inp["ptr"].dtype == torch.long
+        # adapt_input transposes neighbor_list from nvalchemi [E, 2] to MACE [2, E]
+        E = single_batch.neighbor_list.shape[0]
+        assert inp["edge_index"].shape == (2, E)
+
+    def test_positions_requires_grad_when_forces_requested(self, wrapper, single_batch):
+        wrapper.model_config.active_outputs = {"energy", "forces"}
+        inp = wrapper.adapt_input(single_batch)
+        assert inp["positions"].requires_grad
+
+    def test_positions_no_requires_grad_energy_only(self, wrapper, single_batch):
+        wrapper.model_config.active_outputs = {"energy"}
+        inp = wrapper.adapt_input(single_batch)
+        assert not inp["positions"].requires_grad
+
+    def test_atomic_data_promoted_to_batch(self, wrapper):
+        data = _make_water()
+        inp = wrapper.adapt_input(data)
+        # batch tensor should exist and be all zeros (single system)
+        assert inp["batch"].shape[0] == 3  # 3 atoms
+        assert inp["batch"].max().item() == 0
+
+    def test_no_pbc_zero_neighbor_list_shifts(self, wrapper, single_batch):
+        # single_batch has no neighbor_list_shifts → adapt_input fills zeros
+        inp = wrapper.adapt_input(single_batch)
+        # nvalchemi neighbor_list is [E, 2]; adapt_input transposes to [2, E].
+        E = single_batch.neighbor_list.shape[0]
+        assert inp["neighbor_list_shifts"].shape == (E, 3)
+        assert inp["neighbor_list_shifts"].abs().max().item() == pytest.approx(0.0)
+
+    def test_no_pbc_identity_cell(self, wrapper, single_batch):
+        # single_batch has no cell → adapt_input fills identity [B, 3, 3]
+        inp = wrapper.adapt_input(single_batch)
+        B = single_batch.num_graphs
+        assert inp["cell"].shape == (B, 3, 3)
+        expected = torch.eye(3).unsqueeze(0).expand(B, -1, -1)
+        assert torch.allclose(inp["cell"], expected)
+
+    def test_pbc_neighbor_list_shifts_passed_through(self, wrapper, pbc_batch):
+        inp = wrapper.adapt_input(pbc_batch)
+        # neighbor_list_shifts were all zeros in _make_pbc_water; should be preserved
+        assert inp["neighbor_list_shifts"].shape[1] == 3
+        assert inp["neighbor_list_shifts"].abs().max().item() == pytest.approx(0.0)
+
+    def test_pbc_cell_passed_through(self, wrapper, pbc_batch):
+        inp = wrapper.adapt_input(pbc_batch)
+        B = pbc_batch.num_graphs
+        assert inp["cell"].shape == (B, 3, 3)
+        # 10 Å cubic cell
+        assert torch.allclose(inp["cell"][0], torch.eye(3) * 10.0, atol=1e-5)
+
+    def test_multi_batch_batch_indices(self, wrapper, multi_batch):
+        # B=2, N=6: first 3 atoms → graph 0, last 3 → graph 1
+        inp = wrapper.adapt_input(multi_batch)
+        assert inp["batch"].tolist() == [0, 0, 0, 1, 1, 1]
+
+
+# ---------------------------------------------------------------------------
+# adapt_output
+# ---------------------------------------------------------------------------
+
+
+class TestAdaptOutput:
+    def _raw(self, B: int = 1, N: int = 3) -> dict:
+        return {
+            "energy": torch.randn(B),
+            "forces": torch.randn(N, 3),
+            "node_feats": torch.randn(N, _HIDDEN_DIM),
+        }
+
+    def test_energy_key_in_output(self, wrapper, single_batch):
+        raw = self._raw()
+        out = wrapper.adapt_output(raw, single_batch)
+        assert "energy" in out
+
+    def test_energies_shape(self, wrapper, single_batch):
+        raw = self._raw(B=1, N=3)
+        out = wrapper.adapt_output(raw, single_batch)
+        assert out["energy"].shape == (1, 1)
+
+    def test_energies_already_2d(self, wrapper, single_batch):
+        raw = self._raw()
+        raw["energy"] = raw["energy"].unsqueeze(-1)  # already [B, 1]
+        out = wrapper.adapt_output(raw, single_batch)
+        assert out["energy"].shape == (1, 1)
+
+    def test_forces_passed_through(self, wrapper, single_batch):
+        raw = self._raw()
+        wrapper.model_config.active_outputs = {"energy", "forces"}
+        out = wrapper.adapt_output(raw, single_batch)
+        assert "forces" in out
+        assert out["forces"].shape == (3, 3)
+
+    def test_stress_key_in_output(self, wrapper, single_batch):
+        raw = self._raw()
+        raw["stress"] = torch.randn(1, 3, 3)
+        wrapper.model_config.active_outputs = {"energy", "forces", "stress"}
+        out = wrapper.adapt_output(raw, single_batch)
+        assert "stress" in out
+
+    def test_missing_optional_outputs_absent(self, wrapper, single_batch):
+        # No stress or hessian in raw output → not in result
+        raw = {"energy": torch.randn(1), "forces": torch.randn(3, 3)}
+        out = wrapper.adapt_output(raw, single_batch)
+        assert "stress" not in out or out.get("stress") is None
+        assert "hessian" not in out or out.get("hessian") is None
+
+
+# ---------------------------------------------------------------------------
+# forward
+# ---------------------------------------------------------------------------
+
+
+class TestForward:
+    def test_energies_shape_single(self, wrapper, single_batch):
+        out = wrapper.forward(single_batch)
+        assert out["energy"].shape == (1, 1)
+
+    def test_energies_shape_multi(self, wrapper, multi_batch):
+        out = wrapper.forward(multi_batch)
+        assert out["energy"].shape == (2, 1)
+
+    def test_energies_dtype(self, wrapper, single_batch):
+        out = wrapper.forward(single_batch)
+        assert out["energy"].dtype == wrapper._model_dtype
+
+    def test_forces_shape(self, wrapper, single_batch):
+        out = wrapper.forward(single_batch)
+        assert out["forces"].shape == (3, 3)  # 3 atoms, 3 coords
+
+    def test_forces_shape_multi(self, wrapper, multi_batch):
+        out = wrapper.forward(multi_batch)
+        assert out["forces"].shape == (6, 3)  # 6 atoms total
+
+    def test_forces_conservative(self, wrapper):
+        """Verify forces = -dE/dpos using the mock model's analytic energy.
+
+        For energy = |pos|, the analytic force is -pos / |pos|.
+        For a single H atom at (0.5, 0, 0): force should be (-1, 0, 0).
+        """
+        data = _make_single_atom()
+        batch = Batch.from_data_list([data])
+        out = wrapper.forward(batch)
+        forces = out["forces"]
+        # Analytic: pos = [0.5, 0, 0], |pos| = 0.5, force = -[0.5,0,0]/0.5 = [-1,0,0]
+        assert forces.shape == (1, 3)
+        assert torch.allclose(forces[0], torch.tensor([-1.0, 0.0, 0.0]), atol=1e-5)
+
+    def test_train_mode_works_with_optimizer(self, wrapper):
+        data = _make_single_atom()
+        batch = Batch.from_data_list([data])
+        optimizer = torch.optim.SGD(wrapper.parameters(), lr=0.1)
+        before = wrapper.model._param.weight.detach().clone()
+
+        wrapper.train()
+        optimizer.zero_grad()
+        out = wrapper.forward(batch)
+        loss = out["forces"].square().sum()
+        loss.backward()
+        optimizer.step()
+
+        after = wrapper.model._param.weight.detach()
+        assert not torch.allclose(after, before)
+
+    def test_no_forces_when_disabled(self, wrapper, single_batch):
+        wrapper.model_config.active_outputs = {"energy"}
+        out = wrapper.forward(single_batch)
+        # forces key may be absent or None
+        assert out.get("forces") is None
+
+    def test_stresses_shape(self, wrapper, single_batch):
+        wrapper.model_config.active_outputs = {"energy", "forces", "stress"}
+        out = wrapper.forward(single_batch)
+        assert out["stress"].shape == (1, 3, 3)
+
+    def test_atomic_data_input(self, wrapper):
+        data = _make_water()
+        out = wrapper.forward(data)
+        assert out["energy"].shape == (1, 1)
+
+    def test_pbc_batch_runs(self, wrapper, pbc_batch):
+        out = wrapper.forward(pbc_batch)
+        assert out["energy"].shape == (1, 1)
+
+    def test_training_flag_follows_wrapper_mode(self, wrapper, single_batch):
+        # The wrapper forward passes ``training=self.training`` to the inner
+        # MACE forward: train mode retains the autograd graph through
+        # forces/stresses so force/stress losses can backprop (fine-tuning),
+        # while eval mode (inference, MD, DD) takes the cheaper
+        # no-create-graph path.
+        wrapper.train()
+        wrapper.forward(single_batch)
+        wrapper.eval()
+        wrapper.forward(single_batch)
+        assert wrapper.model.training_flags[-2:] == [True, False]
+
+
+# ---------------------------------------------------------------------------
+# Fine-tuning workflow
+# ---------------------------------------------------------------------------
+
+
+class TestFineTuningWorkflow:
+    def test_strategy_updates_trainable_mace_parameter(self):
+        wrapper = MACEWrapper(TrainableMockMACEModel())
+        initial_scale = wrapper.model.scale.detach().clone()
+
+        strategy = FineTuningStrategy(
+            models=wrapper,
+            freeze_patterns=("main.model.*",),
+            trainable_patterns=("main.model.scale",),
+            optimizer_configs=OptimizerConfig(
+                optimizer_cls=torch.optim.SGD,
+                optimizer_kwargs={"lr": 0.05},
+            ),
+            num_steps=8,
+            training_fn=default_training_fn,
+            loss_fn=EnergyMSELoss() + ForceMSELoss(normalize_by_atom_count=True),
+        )
+
+        strategy.run([_make_finetune_batch()] * 8)
+
+        # Fine-tuning runs the wrapper in train mode, so the inner-model
+        # ``training`` kwarg is True across the run (retains the graph for
+        # the force/stress loss); the trainable scale moves via autograd.
+        assert wrapper.model.training_flags == [True] * 8
+        assert id(wrapper.model.scale) in _optimizer_param_ids(strategy)
+        assert wrapper.model.scale.detach().abs() < initial_scale.abs()
+
+    def test_strategy_trains_eval_wrapper_and_restores_mode(self):
+        wrapper = MACEWrapper(TrainableMockMACEModel())
+        wrapper.eval()
+
+        strategy = FineTuningStrategy(
+            models=wrapper,
+            trainable_patterns=("main.model.scale",),
+            optimizer_configs=OptimizerConfig(
+                optimizer_cls=torch.optim.SGD,
+                optimizer_kwargs={"lr": 0.0},
+            ),
+            num_steps=1,
+            training_fn=default_training_fn,
+            loss_fn=EnergyMSELoss(),
+        )
+
+        strategy.run([_make_finetune_batch()])
+
+        # The strategy trains the (eval) wrapper in train mode — so the
+        # inner-model ``training`` kwarg is True during the forward — then
+        # restores the wrapper's own eval mode.
+        assert wrapper.model.training_flags == [True]
+        assert wrapper.training is False
+
+
+# ---------------------------------------------------------------------------
+# compute_embeddings
+# ---------------------------------------------------------------------------
+
+
+class TestComputeEmbeddings:
+    def test_node_embeddings_shape(self, wrapper, single_batch):
+        result = wrapper.compute_embeddings(single_batch)
+        assert result.node_embeddings.shape == (3, _HIDDEN_DIM)
+
+    def test_graph_embeddings_shape(self, wrapper, single_batch):
+        result = wrapper.compute_embeddings(single_batch)
+        assert result.graph_embeddings.shape == (1, _HIDDEN_DIM)
+
+    def test_graph_embeddings_shape_multi(self, wrapper, multi_batch):
+        result = wrapper.compute_embeddings(multi_batch)
+        assert result.graph_embeddings.shape == (2, _HIDDEN_DIM)
+
+    def test_graph_embeddings_is_sum_of_node_embeddings(self, wrapper, single_batch):
+        # graph_embeddings = scatter_add of node_embeddings — for B=1 they should be equal.
+        result = wrapper.compute_embeddings(single_batch)
+        expected_graph = result.node_embeddings.sum(dim=0)
+        assert torch.allclose(result.graph_embeddings[0], expected_graph)
+
+    def test_does_not_mutate_model_config(self, wrapper, single_batch):
+        wrapper.model_config.active_outputs = {"energy", "forces", "stress"}
+        wrapper.compute_embeddings(single_batch)
+        # model_config must be unchanged after the call
+        assert "forces" in wrapper.model_config.active_outputs
+        assert "stress" in wrapper.model_config.active_outputs
+
+    def test_atomic_data_input(self, wrapper):
+        data = _make_water()
+        result = wrapper.compute_embeddings(data)
+        assert result.node_embeddings.shape == (3, _HIDDEN_DIM)
+
+    def test_no_grad_on_positions_after_embeddings(self, wrapper, single_batch):
+        # compute_embeddings passes compute_force=False; positions should not
+        # require grad inside the call (they have no external requires_grad set).
+        # The batch positions themselves should not gain requires_grad.
+        wrapper.compute_embeddings(single_batch)
+        assert not single_batch.positions.requires_grad
+
+
+# ---------------------------------------------------------------------------
+# export_model
+# ---------------------------------------------------------------------------
+
+
+class TestExportModel:
+    def test_export_full_model(self, wrapper, tmp_path):
+        path = tmp_path / "mace.pt"
+        wrapper.export_model(path)
+        assert path.exists()
+        loaded = torch.load(path, weights_only=False)
+        assert isinstance(loaded, torch.nn.Module)
+
+    def test_export_state_dict(self, wrapper, tmp_path):
+        path = tmp_path / "mace_sd.pt"
+        wrapper.export_model(path, as_state_dict=True)
+        assert path.exists()
+        sd = torch.load(path, weights_only=True)
+        assert isinstance(sd, dict)
+
+    def test_exported_model_matches_wrapper(self, wrapper, tmp_path):
+        path = tmp_path / "mace.pt"
+        wrapper.export_model(path)
+        loaded = torch.load(path, weights_only=False)
+        # State dicts of the exported model should match the wrapped model.
+        for key in loaded.state_dict():
+            assert torch.allclose(
+                loaded.state_dict()[key], wrapper.model.state_dict()[key]
+            )
+
+
+# ---------------------------------------------------------------------------
+# EMA checkpointing
+# ---------------------------------------------------------------------------
+
+
+class TestEMAIntegration:
+    @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
+    def test_strategy_checkpoint_round_trip_restores_ema_cuda_wrapper(
+        self,
+        tmp_path,
+    ) -> None:
+        """Strategy checkpoints restore EMA state into the runtime hook.
+
+        User checkpoint restarts go through ``TrainingStrategy`` and
+        ``load_checkpoint`` rather than saving an EMA hook directly. This test
+        saves a strategy checkpoint with pending EMA weights loaded on CPU, then
+        restores them into a caller-supplied runtime hook and materializes the
+        averaged ``MACEWrapper`` against the restored CUDA model.
+        """
+        device = torch.device("cuda", torch.cuda.current_device())
+        source = MACEWrapper(MockMACEModel().to(device))
+        batch = Batch.from_data_list([_make_water(device="cuda")])
+
+        ema = EMAHook(model_key="main", decay=0.0)
+        strategy = TrainingStrategy(
+            models=source,
+            optimizer_configs=OptimizerConfig(
+                optimizer_cls=torch.optim.Adam,
+                optimizer_kwargs={"lr": 1e-3},
+            ),
+            loss_fn=EnergyMSELoss(),
+            num_steps=1,
+            devices=[device],
+            training_fn=default_training_fn,
+            hooks=[ema],
+        )
+
+        # Seed EMA before saving so the checkpoint contains hook-owned tensor state.
+        ema(
+            _make_ema_ctx(source, step_count=0),
+            TrainingStage.AFTER_OPTIMIZER_STEP,
+        )
+        strategy.save_checkpoint(tmp_path)
+
+        # Users restore strategy checkpoints through the strategy convenience API;
+        # hooks are runtime objects supplied fresh and hydrated by the loader.
+        restored_ema = EMAHook(model_key="main", decay=0.0)
+        restored_strategy = TrainingStrategy.load_checkpoint(
+            tmp_path,
+            map_location=device,
+            hooks=[restored_ema],
+            training_fn=default_training_fn,
+        )
+        assert restored_ema._averaged_model is None
+        assert restored_ema._pending_averaged_state is not None
+
+        # The pending EMA state is materialized lazily once the restored model exists.
+        restored_ema(
+            _make_ema_ctx(restored_strategy.models["main"], step_count=1),
+            TrainingStage.AFTER_OPTIMIZER_STEP,
+        )
+
+        averaged = restored_ema.get_averaged_model().module
+        assert isinstance(averaged, MACEWrapper)
+        assert averaged._node_emb.device == device
+        assert next(averaged.parameters()).device == device
+
+        expected = source.forward(batch)
+        actual = averaged.forward(batch)
+        torch.testing.assert_close(actual["energy"], expected["energy"])
+        torch.testing.assert_close(actual["forces"], expected["forces"])
+
+
+# ---------------------------------------------------------------------------
+# from_checkpoint error path (no network required)
+# ---------------------------------------------------------------------------
+
+
+class TestFromCheckpointErrors:
+    def test_raises_import_error_when_mace_unavailable(self, monkeypatch):
+        from nvalchemi._optional import OptionalDependency
+
+        monkeypatch.setattr(OptionalDependency.MACE, "_available", False)
+        with pytest.raises(ImportError):
+            MACEWrapper.from_checkpoint("medium")
+
+    def test_raises_import_error_for_cueq_when_unavailable(
+        self, monkeypatch, mock_model
+    ):
+        """cuEq ImportError should reference the [mace] extra."""
+        from nvalchemi._optional import OptionalDependency
+
+        monkeypatch.setattr(
+            "mace.calculators.foundations_models.download_mace_mp_checkpoint",
+            lambda _: "unused",
+        )
+        monkeypatch.setattr("torch.load", lambda *a, **kw: mock_model)
+        # ``from_checkpoint`` gates cuEq through the OptionalDependency
+        # framework (not a bare ``import cuequivariance``), so force the
+        # dependency unavailable at that layer — the cueq check fires before
+        # the CUDA-device check, so this raises regardless of device.
+        monkeypatch.setattr(OptionalDependency.CUEQUIVARIANCE, "_available", False)
+
+        with pytest.raises(ImportError, match="nvalchemi-toolkit\\[mace\\]"):
+            MACEWrapper.from_checkpoint("medium", enable_cueq=True)
+
+    def test_raises_value_error_for_cueq_on_cpu(self, monkeypatch, mock_model):
+        """cuEq conversion requires an explicit CUDA target."""
+        import sys
+        import types
+
+        from mace.calculators import foundations_models
+
+        converter_calls = []
+        converter_module = types.ModuleType("mace.cli.convert_e3nn_cueq")
+
+        def fake_convert(*args, **kwargs):
+            converter_calls.append((args, kwargs))
+            return mock_model
+
+        converter_module.run = fake_convert
+
+        monkeypatch.setattr(
+            foundations_models,
+            "download_mace_mp_checkpoint",
+            lambda _: "unused",
+        )
+        monkeypatch.setitem(
+            sys.modules, "cuequivariance", types.ModuleType("cuequivariance")
+        )
+        monkeypatch.setitem(
+            sys.modules,
+            "mace.cli.convert_e3nn_cueq",
+            converter_module,
+        )
+        monkeypatch.setattr("torch.load", lambda *args, **kwargs: mock_model)
+
+        with pytest.raises(ValueError, match="CUDA device"):
+            MACEWrapper.from_checkpoint(
+                "medium",
+                device=torch.device("cpu"),
+                enable_cueq=True,
+            )
+
+        assert converter_calls == []
+
+    @pytest.mark.parametrize("device", ["cpu", torch.device("cpu")])
+    def test_from_checkpoint_normalizes_load_device(
+        self, monkeypatch, mock_model, device
+    ):
+        """torch.load and final placement receive a normalized torch.device."""
+        load_map_locations = []
+        to_devices = []
+
+        def fake_load(*args, **kwargs):
+            load_map_locations.append(kwargs["map_location"])
+            return mock_model
+
+        def fake_to(*args, **kwargs):
+            to_devices.append(args[0])
+            return mock_model
+
+        monkeypatch.setattr(
+            "mace.calculators.foundations_models.download_mace_mp_checkpoint",
+            lambda _: "unused",
+        )
+        monkeypatch.setattr("torch.load", fake_load)
+        monkeypatch.setattr(mock_model, "to", fake_to)
+
+        wrapper = MACEWrapper.from_checkpoint("medium", device=device)
+
+        assert wrapper.model is mock_model
+        assert load_map_locations == [torch.device("cpu")]
+        assert to_devices == [torch.device("cpu")]
+
+    def test_cueq_conversion_uses_active_cuda_context(self, monkeypatch, mock_model):
+        """Explicit CUDA indices are preserved via the active CUDA context."""
+        import sys
+        import types
+
+        from mace.calculators import foundations_models
+
+        cuda_context_devices = []
+        converter_calls = []
+        to_devices = []
+
+        class FakeCudaDevice:
+            def __init__(self, device):
+                self.device = device
+                cuda_context_devices.append(("init", device))
+
+            def __enter__(self):
+                cuda_context_devices.append(("enter", self.device))
+                return self
+
+            def __exit__(self, exc_type, exc_value, traceback):
+                cuda_context_devices.append(("exit", self.device))
+                return False
+
+        def fake_convert(model, *, return_model, device):
+            converter_calls.append(
+                {"model": model, "return_model": return_model, "device": device}
+            )
+            return model
+
+        def fake_to(*args, **kwargs):
+            to_devices.append(args[0])
+            return mock_model
+
+        converter_module = types.ModuleType("mace.cli.convert_e3nn_cueq")
+        converter_module.run = fake_convert
+
+        monkeypatch.setattr(
+            foundations_models,
+            "download_mace_mp_checkpoint",
+            lambda _: "unused",
+        )
+        monkeypatch.setitem(
+            sys.modules, "cuequivariance", types.ModuleType("cuequivariance")
+        )
+        monkeypatch.setitem(
+            sys.modules,
+            "mace.cli.convert_e3nn_cueq",
+            converter_module,
+        )
+        monkeypatch.setattr("torch.load", lambda *args, **kwargs: mock_model)
+        monkeypatch.setattr(torch.cuda, "device", FakeCudaDevice)
+        monkeypatch.setattr(mock_model, "to", fake_to)
+
+        wrapper = MACEWrapper.from_checkpoint(
+            "medium",
+            device="cuda:1",
+            enable_cueq=True,
+        )
+
+        target_device = torch.device("cuda:1")
+        assert wrapper.model is mock_model
+        assert cuda_context_devices == [
+            ("init", target_device),
+            ("enter", target_device),
+            ("exit", target_device),
+        ]
+        assert converter_calls == [
+            {"model": mock_model, "return_model": True, "device": "cuda"}
+        ]
+        assert to_devices == [target_device]
+
+    def test_from_checkpoint_overrides_atomic_energies(self, monkeypatch, mock_model):
+        """Inline E0 overrides update MACE atomic_energies_fn in-place."""
+        mock_model.atomic_energies_fn = torch.nn.Module()
+        mock_model.atomic_energies_fn.register_buffer(
+            "atomic_energies", torch.zeros(3, dtype=torch.float64)
+        )
+        monkeypatch.setattr(
+            "mace.calculators.foundations_models.download_mace_mp_checkpoint",
+            lambda _: "unused",
+        )
+        monkeypatch.setattr("torch.load", lambda *args, **kwargs: mock_model)
+
+        wrapper = MACEWrapper.from_checkpoint(
+            "medium",
+            device=torch.device("cpu"),
+            atomic_energies={"1": -1.5, "8": -8.5},
+        )
+
+        assert wrapper.model.atomic_energies_fn.atomic_energies.tolist() == [
+            -1.5,
+            0.0,
+            -8.5,
+        ]
+        assert wrapper._checkpoint_spec is not None
+        assert wrapper._checkpoint_spec.atomic_energies == {"1": -1.5, "8": -8.5}
+
+    def test_from_checkpoint_overrides_atomic_energies_from_json(
+        self, monkeypatch, mock_model, tmp_path
+    ):
+        """E0 overrides may be read from a JSON file."""
+        path = tmp_path / "e0.json"
+        path.write_text(json.dumps({"6": -6.5}))
+        mock_model.atomic_energies_fn = torch.nn.Module()
+        mock_model.atomic_energies_fn.register_buffer(
+            "atomic_energies", torch.zeros(3, dtype=torch.float64)
+        )
+        monkeypatch.setattr(
+            "mace.calculators.foundations_models.download_mace_mp_checkpoint",
+            lambda _: "unused",
+        )
+        monkeypatch.setattr("torch.load", lambda *args, **kwargs: mock_model)
+
+        wrapper = MACEWrapper.from_checkpoint(
+            "medium",
+            device=torch.device("cpu"),
+            atomic_energies_path=path,
+        )
+
+        assert wrapper.model.atomic_energies_fn.atomic_energies.tolist() == [
+            0.0,
+            -6.5,
+            0.0,
+        ]
+
+    def test_from_checkpoint_rejects_unknown_atomic_energy_element(
+        self, monkeypatch, mock_model
+    ):
+        """E0 overrides must match elements supported by the checkpoint."""
+        mock_model.atomic_energies_fn = torch.nn.Module()
+        mock_model.atomic_energies_fn.register_buffer(
+            "atomic_energies", torch.zeros(3, dtype=torch.float64)
+        )
+        monkeypatch.setattr(
+            "mace.calculators.foundations_models.download_mace_mp_checkpoint",
+            lambda _: "unused",
+        )
+        monkeypatch.setattr("torch.load", lambda *args, **kwargs: mock_model)
+
+        with pytest.raises(ValueError, match="not supported"):
+            MACEWrapper.from_checkpoint(
+                "medium",
+                device=torch.device("cpu"),
+                atomic_energies={"14": -14.0},
+            )
+
+
+# ---------------------------------------------------------------------------
+# Integration tests — real MACE checkpoint (requires network, marked slow)
+# ---------------------------------------------------------------------------
+
+# H2O molecule: O at origin, two H at ~0.96 Å.  All pairs within any
+# reasonable MACE cutoff (≥ 5 Å), so a full symmetric edge list is valid.
+_WATER_POSITIONS = torch.tensor(
+    [[0.0, 0.0, 0.0], [0.96, 0.0, 0.0], [0.0, 0.96, 0.0]], dtype=torch.float64
+)
+_WATER_ATOMIC_NUMBERS = torch.tensor([8, 1, 1], dtype=torch.long)
+_WATER_EDGE_INDEX = torch.tensor(
+    [[0, 1], [1, 0], [0, 2], [2, 0], [1, 2], [2, 1]], dtype=torch.long
+)
+
+
+def _water_batch(dtype: torch.dtype = torch.float64, device: str = "cpu") -> Batch:
+    data = AtomicData(
+        positions=_WATER_POSITIONS.to(dtype=dtype, device=device),
+        atomic_numbers=_WATER_ATOMIC_NUMBERS.to(device=device),
+        neighbor_list=_WATER_EDGE_INDEX.to(device=device),
+    )
+    return Batch.from_data_list([data])
+
+
+def _water_batch_with_energy(
+    dtype: torch.dtype = torch.float32, device: str = "cpu"
+) -> Batch:
+    """Return a water batch with a supervised energy target for training tests."""
+    batch = _water_batch(dtype=dtype, device=device)
+    batch.energy = torch.zeros(1, 1, dtype=dtype, device=device)
+    return batch
+
+
+def _labelled_water_batch(
+    dtype: torch.dtype = torch.float32, device: str = "cpu"
+) -> Batch:
+    data = AtomicData(
+        positions=_WATER_POSITIONS.to(dtype=dtype, device=device),
+        atomic_numbers=_WATER_ATOMIC_NUMBERS.to(device=device),
+        neighbor_list=_WATER_EDGE_INDEX.to(device=device),
+        energy=torch.zeros(1, 1, dtype=dtype, device=device),
+        forces=torch.zeros(3, 3, dtype=dtype, device=device),
+    )
+    return Batch.from_data_list([data])
+
+
+@pytest.fixture(scope="session")
+def real_wrapper_cpu():
+    """Load the MACE-MP small checkpoint once per session (requires network).
+
+    The fixture calls ``pytest.skip`` if the download fails (e.g. no internet),
+    so dependent tests are cleanly skipped rather than failing.
+
+    We use ``small-0b`` — the smallest foundation model — to keep download
+    time and memory usage low.
+    """
+    try:
+        return MACEWrapper.from_checkpoint(
+            "small-0b", device=torch.device("cpu"), dtype=torch.float32
+        )
+    except Exception as e:
+        pytest.skip(f"Could not load MACE checkpoint (network unavailable?): {e}")
+
+
+@pytest.mark.slow
+class TestRealCheckpoint:
+    """Integration tests against a real MACE-MP checkpoint.
+
+    All tests in this class are marked ``slow`` and skipped when
+    ``real_wrapper_cpu`` cannot download the checkpoint.
+    """
+
+    def test_is_mace_wrapper(self, real_wrapper_cpu):
+        assert isinstance(real_wrapper_cpu, MACEWrapper)
+
+    def test_checkpoint_wrapper_defaults_to_eval(self, real_wrapper_cpu):
+        assert real_wrapper_cpu.training is False
+        assert real_wrapper_cpu.model.training is False
+
+    def test_underlying_model_is_mace(self, real_wrapper_cpu):
+        from mace.modules import ScaleShiftMACE
+
+        assert isinstance(real_wrapper_cpu.model, ScaleShiftMACE)
+
+    def test_model_config_matches_wrapper(self, real_wrapper_cpu):
+        cfg = real_wrapper_cpu.model_config
+        assert "forces" in cfg.autograd_outputs
+        assert "energy" in cfg.outputs
+        assert "forces" in cfg.outputs
+        assert cfg.neighbor_config is not None
+        assert cfg.neighbor_config.format == NeighborListFormat.COO
+
+    def test_cutoff_positive(self, real_wrapper_cpu):
+        assert real_wrapper_cpu.cutoff > 0.0
+
+    def test_inference_energies_shape(self, real_wrapper_cpu):
+        batch = _water_batch(dtype=torch.float32)
+        out = real_wrapper_cpu.forward(batch)
+        assert out["energy"].shape == (1, 1)
+
+    def test_inference_forces_shape(self, real_wrapper_cpu):
+        batch = _water_batch(dtype=torch.float32)
+        out = real_wrapper_cpu.forward(batch)
+        assert out["forces"].shape == (3, 3)
+
+    def test_inference_float64(self, real_wrapper_cpu):
+        """Wrapper handles float64 input even when model weights are float32."""
+        batch = _water_batch(dtype=torch.float64)
+        # float64 input is cast to model dtype (float32) inside adapt_input
+        out = real_wrapper_cpu.forward(batch)
+        assert out["energy"].dtype == torch.float32
+
+    def test_dtype_float32_conversion(self):
+        """Loading with dtype=float32 produces float32 weights."""
+        try:
+            w = MACEWrapper.from_checkpoint(
+                "small-0b", device=torch.device("cpu"), dtype=torch.float32
+            )
+        except Exception as e:
+            pytest.skip(f"Checkpoint unavailable: {e}")
+        assert w._model_dtype == torch.float32
+
+    def test_dtype_conversion_uniform(self):
+        """All weights including atomic energy are converted to the target dtype."""
+        try:
+            w = MACEWrapper.from_checkpoint(
+                "small-0b", device=torch.device("cpu"), dtype=torch.float32
+            )
+        except Exception as e:
+            pytest.skip(f"Checkpoint unavailable: {e}")
+        ae = w.model.atomic_energies_fn.atomic_energies
+        assert ae.dtype == torch.float32
+
+    def test_export_and_reload(self, real_wrapper_cpu, tmp_path):
+        path = tmp_path / "small_ob.pt"
+        real_wrapper_cpu.export_model(path)
+        reloaded = torch.load(path, weights_only=False)
+        from mace.modules import ScaleShiftMACE
+
+        assert isinstance(reloaded, ScaleShiftMACE)
+
+    def test_compute_embeddings_run(self, real_wrapper_cpu):
+        batch = _water_batch(dtype=torch.float32)
+        result = real_wrapper_cpu.compute_embeddings(batch)
+        assert result.node_embeddings.shape[0] == 3
+        assert result.graph_embeddings.shape == (1, result.node_embeddings.shape[1])
+
+    def test_fine_tuning_strategy_force_loss_updates_real_checkpoint(self):
+        try:
+            wrapper = MACEWrapper.from_checkpoint(
+                "small-0b", device=torch.device("cpu"), dtype=torch.float32
+            )
+        except Exception as e:
+            pytest.skip(f"Checkpoint unavailable: {e}")
+
+        initial = {
+            name: parameter.detach().clone()
+            for name, parameter in wrapper.named_parameters()
+        }
+        strategy = FineTuningStrategy(
+            models=wrapper,
+            freeze_patterns=("main.model.*",),
+            trainable_patterns=("main.model.*",),
+            optimizer_configs=OptimizerConfig(
+                optimizer_cls=torch.optim.Adam,
+                optimizer_kwargs={"lr": 1e-5},
+            ),
+            num_steps=1,
+            training_fn=default_training_fn,
+            loss_fn=ForceMSELoss(normalize_by_atom_count=True),
+        )
+
+        strategy.run([_labelled_water_batch(dtype=torch.float32)])
+
+        changed = [
+            name
+            for name, parameter in wrapper.named_parameters()
+            if not torch.equal(initial[name], parameter)
+        ]
+        assert changed
+
+    def test_compile_inference(self):
+        """torch.compile produces a working inference-only model.
+
+        Requires MACE >= the patch in mace-org/mace@6a32999 that fixes
+        e3nn.Irreps.__reduce__ incompatibility with torch._dynamo guards.
+        The test is skipped automatically when the known NotImplementedError
+        from SEQUENCE_LENGTH guard creation is detected.
+        """
+        try:
+            w = MACEWrapper.from_checkpoint(
+                "small-0b",
+                device=torch.device("cpu"),
+                dtype=torch.float32,
+                compile_model=True,
+            )
+        except Exception as e:
+            pytest.skip(f"Checkpoint unavailable or compile failed: {e}")
+
+        batch = _water_batch(dtype=torch.float32)
+        # compiled model is inference-only — disable force grad to match eval state
+        w.model_config.active_outputs = {"energy"}
+        try:
+            out = w.forward(batch)
+        except Exception as e:
+            if "NotImplementedError" in str(e) or "SEQUENCE_LENGTH" in str(e):
+                pytest.skip(
+                    "torch.compile + MACE failed (e3nn Irreps guard issue); "
+                    "needs MACE patch from mace-org/mace@6a32999"
+                )
+            raise e
+        assert out["energy"].shape == (1, 1)
+
+    def test_cueq_conversion(self):
+        """cuEquivariance conversion produces a valid model (GPU + package required)."""
+        pytest.importorskip(
+            "cuequivariance", reason="cuequivariance not installed; skipping cuEq test"
+        )
+        if not torch.cuda.is_available():
+            pytest.skip("CUDA required for cuEquivariance conversion test")
+        device = torch.device("cuda")
+        try:
+            w = MACEWrapper.from_checkpoint(
+                "small-0b",
+                device=device,
+                dtype=torch.float32,
+                enable_cueq=True,
+            )
+        except Exception as e:
+            pytest.skip(f"Checkpoint unavailable or cuEq failed: {e}")
+
+        batch = _water_batch(dtype=torch.float32, device="cuda")
+        out = w.forward(batch)
+        assert out["energy"].shape == (1, 1)
+        assert out["forces"].shape == (3, 3)
+
+    def test_cueq_strategy_ema_checkpoint_round_trip(self, tmp_path):
+        """Strategy checkpoints restore MACE + cuEq models and EMA hook state.
+
+        This follows the documented user restart path: a strategy owns a
+        MACEWrapper loaded from an existing checkpoint with cuEquivariance
+        enabled, saves a restartable checkpoint, and is reconstructed through
+        ``TrainingStrategy.load_checkpoint`` with a fresh runtime EMA hook.
+        """
+        pytest.importorskip(
+            "cuequivariance", reason="cuequivariance not installed; skipping cuEq test"
+        )
+        if not torch.cuda.is_available():
+            pytest.skip("CUDA required for cuEquivariance EMA checkpoint test")
+        device = torch.device("cuda", torch.cuda.current_device())
+        try:
+            source = MACEWrapper.from_checkpoint(
+                "small-0b",
+                device=device,
+                dtype=torch.float32,
+                enable_cueq=True,
+            )
+        except Exception as e:
+            pytest.skip(f"Checkpoint unavailable or cuEq failed: {e}")
+
+        ema = EMAHook(model_key="main", decay=0.0)
+        strategy = TrainingStrategy(
+            models=source,
+            optimizer_configs=OptimizerConfig(
+                optimizer_cls=torch.optim.Adam,
+                optimizer_kwargs={"lr": 1e-3},
+            ),
+            loss_fn=EnergyMSELoss(),
+            num_steps=1,
+            devices=[device],
+            training_fn=default_training_fn,
+            hooks=[ema],
+        )
+        ema(
+            _make_ema_ctx(source, step_count=0),
+            TrainingStage.AFTER_OPTIMIZER_STEP,
+        )
+        strategy.save_checkpoint(tmp_path)
+
+        restored_ema = EMAHook(model_key="main", decay=0.0)
+        restored = TrainingStrategy.load_checkpoint(
+            tmp_path,
+            map_location=device,
+            hooks=[restored_ema],
+            training_fn=default_training_fn,
+        )
+        assert restored_ema._averaged_model is None
+        assert restored_ema._pending_averaged_state is not None
+
+        restored_model = restored.models["main"]
+        restored_ema(
+            _make_ema_ctx(restored_model, step_count=restored.step_count + 1),
+            TrainingStage.AFTER_OPTIMIZER_STEP,
+        )
+
+        averaged = restored_ema.get_averaged_model().module
+        cpu_buffers = [name for name, buf in averaged.named_buffers() if buf.is_cpu]
+        assert cpu_buffers == []
+
+        batch = _water_batch(dtype=torch.float32, device="cuda")
+        expected = source.forward(batch)
+        actual = averaged.forward(batch)
+        torch.testing.assert_close(actual["energy"], expected["energy"])
+        torch.testing.assert_close(actual["forces"], expected["forces"])
+
+    def test_cueq_strategy_ema_checkpoint_round_trip_after_optimizer_step(
+        self, tmp_path
+    ):
+        """Reloaded MACE + cuEq checkpoints validate through post-step EMA weights.
+
+        The reported failure happens after a real training update, when
+        validation switches from the live cuEq model to the EMA-published
+        cuEq model. This test exercises that full lifecycle instead of
+        manually seeding the EMA hook state before checkpointing.
+        """
+        pytest.importorskip(
+            "cuequivariance", reason="cuequivariance not installed; skipping cuEq test"
+        )
+        if not torch.cuda.is_available():
+            pytest.skip("CUDA required for cuEquivariance EMA checkpoint test")
+        device = torch.device("cuda", torch.cuda.current_device())
+        try:
+            source = MACEWrapper.from_checkpoint(
+                "small-0b",
+                device=device,
+                dtype=torch.float32,
+                enable_cueq=True,
+            )
+        except Exception as e:
+            pytest.skip(f"Checkpoint unavailable or cuEq failed: {e}")
+
+        train_batch = _water_batch_with_energy(dtype=torch.float32, device="cuda")
+        val_batch = _water_batch_with_energy(dtype=torch.float32, device="cuda")
+        loss = EnergyMSELoss()
+        ema = EMAHook(model_key="main", decay=0.0)
+        strategy = TrainingStrategy(
+            models=source,
+            optimizer_configs=OptimizerConfig(
+                optimizer_cls=torch.optim.Adam,
+                optimizer_kwargs={"lr": 1e-3},
+            ),
+            loss_fn=loss,
+            validation_config=ValidationConfig(
+                validation_data=[val_batch],
+                loss_fn=loss,
+                use_ema="always",
+                grad_mode="enabled",
+            ),
+            num_steps=1,
+            devices=[device],
+            training_fn=default_training_fn,
+            hooks=[ema],
+        )
+
+        # Run the real training lifecycle so optimizer state, updated model
+        # weights, EMA publication, and validation all happen in strategy order.
+        strategy.run([train_batch])
+        assert strategy.inference_model is not None
+        assert strategy.last_validation is not None
+        assert strategy.last_validation["model_source"] == "ema"
+        strategy.save_checkpoint(tmp_path)
+
+        restored_ema = EMAHook(model_key="main", decay=0.0)
+        restored = TrainingStrategy.load_checkpoint(
+            tmp_path,
+            map_location=device,
+            hooks=[restored_ema],
+            training_fn=default_training_fn,
+        )
+        restored.validation_config = ValidationConfig(
+            validation_data=[val_batch],
+            loss_fn=loss,
+            use_ema="always",
+            grad_mode="enabled",
+        )
+
+        # The restored strategy has already reached num_steps=1, so run()
+        # executes SETUP hooks and returns before another optimizer step. That
+        # setup pass should materialize/publish restored EMA state for validation.
+        restored.run([train_batch])
+
+        summary = restored.validate()
+        assert summary is not None
+        assert summary["model_source"] == "ema"
+
+    def test_energy_and_forces_match_ase_calculator(self, real_wrapper_cpu, tmp_path):
+        """MACEWrapper E+F must agree with the MACE ASE MACECalculator.
+
+        The ASE MACECalculator is taken as ground truth.  Both operate on the
+        same H2O geometry (non-PBC) so there are no unit-shift complications.
+        Tolerance is 1e-4 eV for energy and 1e-4 eV/Å for forces.
+        """
+        try:
+            from ase import Atoms
+            from mace.calculators import MACECalculator
+        except ImportError:
+            pytest.skip("ase or mace.calculators not available")
+
+        # Export the underlying MACE model so MACECalculator can load it.
+        ckpt_path = tmp_path / "small_0b_export.pt"
+        real_wrapper_cpu.export_model(ckpt_path)
+
+        # ASE reference: single H2O, no PBC.
+        atoms = Atoms(
+            "H2O",
+            positions=_WATER_POSITIONS.numpy(),
+        )
+        ase_calc = MACECalculator(
+            model_paths=[str(ckpt_path)],
+            device="cpu",
+            default_dtype="float32",
+        )
+        atoms.calc = ase_calc
+        ase_energy = float(atoms.get_potential_energy())  # eV
+        ase_forces = torch.tensor(
+            atoms.get_forces(), dtype=torch.float32
+        )  # (3, 3) eV/Å
+
+        # nvalchemi path: AtomicData → Batch → compute_neighbors → MACEWrapper.
+        from nvalchemi.neighbors import compute_neighbors
+
+        data = AtomicData.from_atoms(atoms)
+        batch = Batch.from_data_list([data])
+
+        compute_neighbors(batch, config=real_wrapper_cpu.model_config.neighbor_config)
+
+        real_wrapper_cpu.model_config.active_outputs = {"energy", "forces"}
+        out = real_wrapper_cpu.forward(batch)
+
+        nv_energy = out["energy"].item()  # eV
+        nv_forces = out["forces"].detach()  # (3, 3) eV/Å
+
+        assert abs(nv_energy - ase_energy) < 1e-4, (
+            f"Energy mismatch: MACEWrapper={nv_energy:.6f} eV, "
+            f"ASE={ase_energy:.6f} eV, diff={abs(nv_energy - ase_energy):.2e} eV"
+        )
+        assert torch.allclose(nv_forces, ase_forces, atol=1e-4), (
+            f"Force mismatch:\n"
+            f"  MACEWrapper:        {nv_forces.tolist()}\n"
+            f"  ASE MACECalculator: {ase_forces.tolist()}"
+        )
+
+    def test_cueq_then_compile(self):
+        """cuEq + torch.compile pipeline works end-to-end (GPU required).
+
+        Requires MACE >= the patch in mace-org/mace@6a32999 that fixes
+        e3nn.Irreps.__reduce__ incompatibility with torch._dynamo guards.
+        """
+        pytest.importorskip("cuequivariance")
+        if not torch.cuda.is_available():
+            pytest.skip("CUDA required")
+        device = torch.device("cuda")
+        try:
+            w = MACEWrapper.from_checkpoint(
+                "small-0b",
+                device=device,
+                dtype=torch.float32,
+                enable_cueq=True,
+                compile_model=True,
+            )
+        except Exception as e:
+            pytest.skip(f"Could not build cueq+compiled model: {e}")
+
+        batch = _water_batch(dtype=torch.float32, device="cuda")
+        w.model_config.active_outputs = {"energy"}
+        try:
+            out = w.forward(batch)
+        except Exception as e:
+            if "NotImplementedError" in str(e) or "SEQUENCE_LENGTH" in str(e):
+                pytest.skip(
+                    "torch.compile + MACE failed (e3nn Irreps guard issue); "
+                    "needs MACE patch from mace-org/mace@6a32999"
+                )
+            raise
+        assert out["energy"].shape == (1, 1)
+
+
+# ---------------------------------------------------------------------------
+# dtype parametrization
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
+def test_forward_dtype_consistency(dtype):
+    """Model and input dtype are always in sync; outputs match."""
+    model = MockMACEModel()
+    model._param = torch.nn.Linear(1, _HIDDEN_DIM, bias=False).to(dtype)
+    # Force r_max and numbers to stay as-is (they don't affect dtype).
+    wrapper = MACEWrapper(model)
+
+    positions = torch.tensor(
+        [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [2.0, 0.0, 0.0]], dtype=dtype
+    )
+    numbers = torch.tensor([8, 1, 1], dtype=torch.long)
+    neighbor_list = torch.tensor(
+        [[0, 1], [1, 0], [0, 2], [2, 0], [1, 2], [2, 1]], dtype=torch.long
+    )
+    data = AtomicData(
+        positions=positions, atomic_numbers=numbers, neighbor_list=neighbor_list
+    )
+    batch = Batch.from_data_list([data])
+
+    out = wrapper.forward(batch)
+    assert out["energy"].dtype == dtype
+    assert out["forces"].dtype == dtype

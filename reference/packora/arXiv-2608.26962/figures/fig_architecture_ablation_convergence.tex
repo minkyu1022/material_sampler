@@ -1,0 +1,15 @@
+
+\begin{figure}[!t]
+  \centering
+  \includegraphics[width=\textwidth]{figures/generated/fig_architecture_ablation_convergence.pdf}
+  \caption{\textbf{Architecture selection, extensions, and caching.}
+    Panels~(a)--(d) report validation $\mathrm{Sol}_C$ on the $\le$300-atom
+    subset with a generation budget of 30 candidates under EDM Heun 200. Pairmixer gives the
+    dominant gain; post-entry Config.~(F) remains close to Config.~(C), while
+    single updates and GEM do not improve final coverage. Panel~(e) reports
+    runtime for synthetic $[64,300]$ EDM Heun inputs, including
+    cache construction, and panel~(f) reports peak memory. Caching post-entry
+    condition-only pair states removes the per-step Pairmixer cost at a fixed
+    memory increase.}
+  \label{fig:architecture-ablation-convergence}
+\end{figure}

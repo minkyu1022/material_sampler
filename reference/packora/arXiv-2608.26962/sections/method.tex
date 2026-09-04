@@ -1,0 +1,231 @@
+\section{Method}
+\label{sec:method}
+
+\model{} predicts atomic coordinates and a unit cell from a molecular specification, a formula-unit count $Z$, and optional auxiliary information using a conditional coordinate--lattice flow. We describe the selected \model{} configuration below, with design choices justified by the controlled studies in \Cref{sec:recipe}.
+
+\subsection{Problem Formulation}
+\label{sec:method-problem}
+
+\textbf{Crystal representation.}
+We represent a crystal with $N$ atoms by atom types
+$\mathbf{A}=(A_1,\ldots,A_N)\in\mathcal{A}^{N}$, Cartesian coordinates
+$\mathbf{X}=(\mathbf{x}_1,\ldots,\mathbf{x}_N)^{\top}\in\mathbb{R}^{N\times3}$, and a
+lattice cell $\mathbf{L}\in\mathbb{R}^{3\times3}$ whose rows are lattice
+vectors. Integer translations along these lattice vectors define the corresponding
+infinite periodic crystal.
+
+Since the same lattice can be represented by different basis vectors and global
+rotations, we canonicalize the cell in two steps. First, we Niggli-reduce~\citep{krivy1976unified,grosse2004numerically} each
+crystal to obtain a reduced basis $\widetilde{\mathbf{L}}$, reducing the ambiguity among equivalent lattice bases. Second, we remove the remaining global rotational
+freedom by forming the rotation-invariant Gram matrix
+$\widetilde{\mathbf{L}}\widetilde{\mathbf{L}}^{\top}$ and taking its unique
+lower-triangular Cholesky factor with positive diagonal:
+\begin{equation*}
+\mathbf{L}=\operatorname{chol}\!\left(
+\widetilde{\mathbf{L}}\widetilde{\mathbf{L}}^{\top}
+\right)=
+\begin{pmatrix}
+e^{\ell_1} & 0 & 0 \\
+\ell_2 & e^{\ell_3} & 0 \\
+\ell_4 & \ell_5 & e^{\ell_6}
+\end{pmatrix}.
+\end{equation*}
+We further parameterize the canonical cell by an unconstrained vector  $\boldsymbol{\ell}=(\ell_1,\ldots,\ell_6)\in\mathbb{R}^{6}$ following \citet{veljkovic2026crystalite}.
+
+\textbf{Molecular crystal structure prediction (CSP).}
+We formulate molecular CSP as conditional generation of Cartesian coordinates
+$\mathbf{X}$ and the lattice latent $\boldsymbol{\ell}$ from a chemical
+specification, a supplied formula-unit count $Z$, and optional auxiliary
+information. The chemical specification consists of $K$ distinct molecular
+graphs $\mathcal{G}=\{G_k\}_{k=1}^{K}$ and a stoichiometry vector
+$\mathbf{r}=(r_1,\ldots,r_K)$, where $r_k$ denotes the number of copies of
+component $G_k$ in one formula unit. For example, a binary $2{:}1$ cocrystal
+has $\mathbf{r}=(2,1)$. Each molecular graph specifies atom types, bond types,
+and formal charges. To be specific, if component $G_k$ contains $N_k$ atoms, a unit cell with $Z$ formula units
+contains
+\[
+N = Z\sum_{k=1}^{K} r_k N_k
+\]
+atoms. Optional information $\mathcal{O}$ may include molecular templates,
+stereochemical annotations, and a space-group label. A molecular template is a
+reference 3D conformer, generated for example with RDKit~\citep{rdkit}, that
+provides local molecular geometry without specifying crystal packing. Given the
+complete condition $\mathcal{C}=(\mathcal{G},\mathbf{r},Z,\mathcal{O})$, the
+generator models $p_{\theta}(\mathbf{X},\boldsymbol{\ell}\mid\mathcal{C})$.
+
+\subsection{Variational Flow Matching for Molecular CSP}
+\label{sec:method-vfm}
+
+We use variational flow matching \citep[VFM;][]{eijkelboom2024variational}, which generalizes flow matching~\citep{lipman2023flow}
+through a flexible choice of the
+variational posterior~\citep{zaghen2025riemannian}.
+
+\textbf{Training objective.} Let $(\mathbf{y}_1,\mathcal{C})$ denote a crystal state and its condition, and let
+$\mathbf{y}_0\sim p_0$ be a prior sample.
+We use the linear conditional path to interpolate between the prior and data endpoints:
+\begin{equation}
+\label{eq:method-flow-path}
+\mathbf{y}_t=(1-t)\mathbf{y}_0+t\mathbf{y}_1.
+\end{equation}
+
+Given a noisy state $\mathbf{y}_t$,
+VFM learns a variational posterior
+$q_{\theta}(\mathbf{y}_1\mid\mathbf{y}_t,t,\mathcal{C})$
+that approximates the true posterior by minimizing the expected negative log-likelihood,
+\begin{equation}
+\label{eq:method-vfm-general}
+\mathcal{L}_{\mathrm{VFM}}(\theta)
+=-\mathbb{E}_{\mathbf{y}_1,\mathbf{y}_t,t}\!\left[
+\log q_{\theta}(\mathbf{y}_1\mid\mathbf{y}_t,t,\mathcal{C})
+\right].
+\end{equation}
+The variational family determines the form of this objective.
+We model the posterior as a fully factorized Laplace distribution with a fixed scale,
+which yields a component-weighted $L^1$ loss on the predicted endpoints.
+
+The model parameterizes the mean of the variational posterior,
+which is equivalent to predicting the clean endpoint $\mathbf{y}_1$ from the noisy
+state $\mathbf{y}_t$ and condition $\mathcal{C}$ as
+$\widehat{\mathbf{X}}_1,\widehat{\boldsymbol{\ell}}_1
+=\boldsymbol{\mu}_t^{\theta}\!\left(\mathbf{y}_t,\mathcal{C}\right)$.
+The equation then simplifies to
+\begin{equation}
+\label{eq:method-vfm-loss}
+\mathcal{L}_{\mathrm{VFM}}(\theta)
+=\mathbb{E}_{\mathbf{y}_1,\mathbf{y}_t,t}\!\left[
+\frac{\lambda_{\mathrm{coord}}}{3N}
+\left\|\widehat{\mathbf{X}}_1-\mathbf{X}_1\right\|_1
++
+\frac{\lambda_{\mathrm{lattice}}}{6}
+\left\|\widehat{\boldsymbol{\ell}}_1-
+\boldsymbol{\ell}_1\right\|_1
+\right],
+\end{equation}
+where $\lambda_{\mathrm{coord}}$ and $\lambda_{\mathrm{lattice}}$ are loss weights
+for the coordinate and lattice components, respectively.
+
+\textbf{Sampling.}
+After training $\boldsymbol{\mu}_t^\theta$, we generate samples by solving the ordinary differential equation (ODE) or the corresponding stochastic differential equation (SDE)~\citep{eijkelboom2024variational,albergo2025stochastic}:
+\begin{equation}
+d\mathbf{y}_t
+=\mathbf{v}_t^\theta(\mathbf{y}_t)\,dt,
+\qquad
+d\mathbf{y}_t
+=
+\left[
+\mathbf{v}_t^\theta(\mathbf{y}_t)
++\frac{g_t^2}{2}\mathbf{s}_t^\theta(\mathbf{y}_t)
+\right]dt
++g_t\,d\mathbf{W}_t.
+\end{equation}
+For the linear path,
+$\mathbf{v}_t^\theta(\mathbf{y}_t)
+=(\boldsymbol{\mu}_t^\theta(\mathbf{y}_t,\mathcal C)-\mathbf{y}_t)/(1-t)$
+and
+$\mathbf{s}_t^\theta(\mathbf{y}_t)
+=(t\,\mathbf{v}_t^\theta(\mathbf{y}_t)-\mathbf{y}_t)/(1-t)$.
+Here, $g_t$ is the diffusion coefficient controlling the stochasticity, and
+$\mathbf{W}_t$ is a standard Wiener process.
+
+\subsection{Model Architecture}
+\label{sec:method-architecture}
+
+Our model $\boldsymbol{\mu}_t^{\theta}$ mainly employs a Pairmixer-based
+architecture~\citep{ouyangzhang2025triangle} with trunk-head modularization~\citep{Abramson2024, bytedance2025protenix}. As shown in
+\Cref{fig:method-architecture}, the model first constructs condition-only
+single and pair representations, refines the pair representation with Pairmixer,
+injects the noisy crystal state into the single representation, and processes it
+with a Diffusion Transformer (DiT)~\citep{peebles2023scalable}. Separate output heads predict the coordinate and lattice endpoints. The complete architecture is specified
+algorithmically in \Cref{app:model-architecture}.
+
+\input{figures/fig_method_architecture.tex}
+
+\textbf{Condition embedding.}
+The input embedder embeds the condition
+$\mathcal{C}=(\mathcal{G},\mathbf{r},Z,\mathcal{O})$ into a per-atom single
+representation $\mathbf{S}_{\mathcal C}$ and an initial per-atom-pair
+representation $\mathbf{P}^{(0)}$:
+\begin{equation*}
+\mathbf{S}_{\mathcal C}=E_{\mathrm{single}}(\mathcal C),
+\qquad
+\mathbf{P}^{(0)}=E_{\mathrm{pair}}(\mathbf{S}_{\mathcal C},\mathcal C),
+\end{equation*}
+where $E_{\mathrm{single}}$ and $E_{\mathrm{pair}}$ are learned single and pair
+embedding networks. The single representation combines atom identity,
+periodic-table descriptors, formal charge, optional template coordinates,
+chirality, and space group. The pair representation combines projected single
+features with intramolecular bond types, bond stereochemistry, template
+displacements, and template distances. Availability masks and learned null states
+distinguish unavailable optional conditions from provided values.
+
+\textbf{Pairmixer.}
+Pairmixer is a streamlined alternative to Pairformer that retains incoming and
+outgoing triangle multiplication and pair transitions while omitting triangle
+attention. Each block updates the current pair representation $\mathbf{P}$ through
+sequential residual operations,
+\begin{equation*}
+\mathbf{P}\leftarrow\mathbf{P}
++\operatorname{TriMul}_{\mathrm{out}}(\mathbf{P}),\qquad
+\mathbf{P}\leftarrow\mathbf{P}
++\operatorname{TriMul}_{\mathrm{in}}(\mathbf{P}),\qquad
+\mathbf{P}\leftarrow\mathbf{P}
++\operatorname{Transition}(\mathbf{P}),
+\end{equation*}
+where $\operatorname{TriMul}_{\mathrm{out}}$ and
+$\operatorname{TriMul}_{\mathrm{in}}$ denote outgoing and incoming triangle
+multiplication, respectively. The transition is a gated feed-forward network
+applied independently to each atom pair. Pairmixer leaves the single representation unchanged and produces a refined pair representation $\mathbf{P}^{\star}$.
+
+\textbf{Noisy-state injection.}
+The noisy crystal state is injected into the single representation
+$\mathbf{S}_{\mathcal C}$. Coordinate features are encoded using Fourier features~\citep{tancik2020fourier}, while the lattice is embedded
+globally and broadcast to all atoms. The resulting single representation is
+\begin{equation*}
+\mathbf{S}_t
+=\mathbf{S}_{\mathcal C}
++E_X(\mathbf{X}_t)
++\operatorname{Broadcast}\!\left(E_L(\boldsymbol{\ell}_t)\right),
+\end{equation*}
+where $E_X$ and $E_L$ denote the coordinate and lattice embedding networks,
+respectively. A sinusoidal embedding of the flow time $t$ provides a separate
+global condition to the transformer.
+
+\textbf{DiT trunk.}
+The trunk follows the DiT architecture, alternating between self-attention and
+feed-forward updates to the single representation. In each attention layer, the
+refined pair representation $\mathbf{P}^{\star}$ is projected to a
+head-specific bias and added to the attention logits:
+\begin{equation*}
+a_{ij}^{(h)}
+=
+\frac{\left\langle\mathbf{q}_i^{(h)},\mathbf{k}_j^{(h)}\right\rangle}
+{\sqrt{d_h}}
++b_h\!\left(\mathbf{P}_{ij}^{\star}\right),
+\end{equation*}
+where $\mathbf{q}_i^{(h)}$ and $\mathbf{k}_j^{(h)}$ are the query and key
+vectors for atoms $i$ and $j$ in attention head $h$, $d_h$ is the head
+dimension, and $b_h$ maps the pair representation to a scalar attention bias.
+The time embedding modulates the normalization and residual gates of both
+self-attention and feed-forward updates~\citep{peebles2023scalable}.
+
+\textbf{Prediction heads.}
+The DiT output $\mathbf{S}^{\mathrm{out}}$ is decoded by separate coordinate and
+lattice endpoint heads. For the set $\mathcal V$ of valid atoms, the coordinate
+head predicts an atomwise vector $\mathbf r_i$ and subtracts its mean over valid
+atoms, while the lattice head applies an MLP to the mean-pooled single
+representation:
+\begin{equation*}
+\mathbf{r}_i
+= W_X \operatorname{Norm}(\mathbf{S}^{\mathrm{out}}_i),\qquad
+\widehat{\mathbf{X}}_{1,i}
+= \mathbf{r}_i
+- \frac{1}{|\mathcal V|}\sum_{j\in\mathcal V}\mathbf{r}_j,\qquad
+\widehat{\boldsymbol{\ell}}_1
+= \operatorname{MLP}\!\left(
+\frac{1}{|\mathcal V|}\sum_{i\in\mathcal V}
+\operatorname{Norm}(\mathbf{S}^{\mathrm{out}}_i)
+\right),
+\end{equation*}
+where $W_X$ is the coordinate projection and
+$\widehat{\mathbf{X}}_1$ and $\widehat{\boldsymbol{\ell}}_1$ denote the predicted
+coordinate and lattice endpoints.

@@ -1,0 +1,15 @@
+system = "cu_ag"
+lattice = "fcc"
+n_atoms = 108
+temperature_min = 500.0
+temperature_max = 1000.0
+delta_mu_a0_ev = 0.690
+delta_mu_a1_ev_per_k = -7.1e-5
+delta_mu_wide_ev = 0.30
+delta_mu_narrow_ev = 0.15
+cutoff_angstrom = 5.0
+steps = 100
+fresh_terminals_per_round = 500
+discrete_loss_weight = 2.0
+volume_loss_weight = 3.0
+

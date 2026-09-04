@@ -1,0 +1,10 @@
+{
+  "audited_epoch": 1788480077,
+  "recorded": 41609,
+  "duplicate_record_lines": 0,
+  "malformed": 0,
+  "failed_or_not_converged": 0,
+  "species_order_failures": 0,
+  "missing_or_empty_artifacts": 0,
+  "passed": true
+}

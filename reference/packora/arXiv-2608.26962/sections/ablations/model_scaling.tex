@@ -1,0 +1,44 @@
+\subsection{Scaling: Balancing Single- and Pair-Track Widths}
+\label{sec:recipe-model-scaling}
+
+\textbf{Explored designs.}
+We study how the single-track width $d_s$ and pair-track width $d_p$ affect
+performance when scaled independently or together. All other settings, including
+depth, Pairmixer placement, conditioning, validation split, and sampler, are held
+fixed. We report both the single-sample solve rate $\mathrm{Sol}_S$ and the
+30-sample crystal-level solve rate $\mathrm{Sol}_C$, capturing per-sample success
+and coverage across targets, respectively.
+
+Starting from the base configuration W0 with $(d_s,d_p)=(512,128)$, we consider:
+\begin{itemize}
+    \item Pair scaling (W1, W2): increase $d_p$ to $192$ and $256$,
+    respectively, while keeping $d_s=512$.
+    \item Single scaling (W3, W5): increase $d_s$ to $768$ and $1024$,
+    respectively, while keeping $d_p=128$.
+    \item Balanced scaling (W4): increase both widths to
+    $(d_s,d_p)=(768,192)$, preserving $d_s/d_p=4$.
+\end{itemize}
+
+\textbf{Scaling either width alone is insufficient.}
+The epoch sweeps reveal distinct limitations of the two isolated scaling paths.
+Increasing only the single width improves $\mathrm{Sol}_S$ but eventually reduces
+$\mathrm{Sol}_C$, suggesting that the added capacity makes successes more
+repeatable on already-solvable targets rather than expanding coverage. Increasing
+only the pair width, in contrast, yields no consistent improvement in either
+metric. Thus, neither isolated scaling path provides a uniformly better trade-off
+across sampling budgets
+(\Cref{fig:width-scaling-tradeoff}; \Cref{tab:width_scaling_ablation}).
+
+\textbf{Balanced scaling reaches the sampling-budget Pareto frontier.}
+Jointly scaling both widths allows W4 to maintain single-sample success while
+recovering crystal-level coverage, yielding a better trade-off than scaling either
+width alone. Adding weight decay of $10^{-2}$ shifts W4 toward greater coverage,
+trading some success at $k{=}1$ for improved coverage at $k{=}30$. We prioritize
+coverage because CSP workflows generate multiple candidates for subsequent ranking;
+a structure absent from the candidate set cannot be recovered downstream
+\citep{hunnisett2024seventhranking,hunnisett2024seventhgeneration}.
+We therefore retain W0 as \model{}-M and select W4 with weight decay
+$10^{-2}$ as \model{}-L (\Cref{fig:width-scaling-tradeoff}).
+
+\input{figures/fig_width_scaling_tradeoff.tex}
+\input{tables/width_scaling_ablation.tex}

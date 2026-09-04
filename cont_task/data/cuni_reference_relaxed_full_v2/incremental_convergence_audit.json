@@ -1,0 +1,13 @@
+{
+  "records": 24015,
+  "unique_ids": 24015,
+  "duplicate_ids": 0,
+  "malformed": 0,
+  "issues": {},
+  "steps": {
+    "min": 22,
+    "median": 39,
+    "max": 79
+  },
+  "passed": true
+}

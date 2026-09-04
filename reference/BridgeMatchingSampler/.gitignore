@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+
+# Training outputs / logs
+outputs/
+ckpts/
+wandb/
+*.pt
+multirun/
+
+# Datasets cached by boltzkit / huggingface
+datasets/
+target_cache/
+.cache/
+
+# Editor / OS
+.idea/
+.vscode/
+.DS_Store
+/.claude-terminal

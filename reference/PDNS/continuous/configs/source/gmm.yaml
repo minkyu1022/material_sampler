@@ -1,0 +1,4 @@
+_target_: src.energies.dist_utils.GMM
+dim: ${dim}
+example: ${gmm_source} # heart, dist, fab, multi, grid, circle
+n_reference_samples: 1000000

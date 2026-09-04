@@ -1,0 +1,220 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# ==============================================================================
+# NVALCHEMI Toolkit - Makefile
+# ==============================================================================
+
+.DEFAULT_GOAL := help
+
+# Keep `uv run` aligned with the selected CUDA stack. Bare `uv run` performs a
+# sync without extras, which can replace a CUDA 12 environment with the default.
+CUDA_EXTRA ?= cu13
+OPTIONAL_EXTRAS ?=
+UV_EXTRA_FLAGS = --extra $(CUDA_EXTRA) $(foreach extra,$(OPTIONAL_EXTRAS),--extra $(extra))
+UV_SYNC ?= uv sync $(UV_EXTRA_FLAGS)
+UV_RUN ?= uv run $(UV_EXTRA_FLAGS)
+
+# ==============================================================================
+# INSTALLATION
+# ==============================================================================
+
+.PHONY: install
+install:  ## Install the package with the default CUDA extra
+	$(UV_SYNC)
+
+.PHONY: setup-ci
+setup-ci:  ## Setup CI environment
+	uv venv --python 3.12
+	$(UV_SYNC)
+	$(UV_RUN) pre-commit install --install-hooks
+
+# ==============================================================================
+# LINTING
+# ==============================================================================
+
+.PHONY: lint
+lint:  ## Run all linting checks
+	$(UV_RUN) pre-commit run check-added-large-files -a
+	$(UV_RUN) pre-commit run trailing-whitespace -a
+	$(UV_RUN) pre-commit run end-of-file-fixer -a
+	$(UV_RUN) pre-commit run debug-statements -a
+	$(UV_RUN) pre-commit run ruff-check -a --show-diff-on-failure
+	$(UV_RUN) pre-commit run ruff-format -a --show-diff-on-failure
+
+.PHONY: lint-fix
+lint-fix:  ## Run linting and auto-fix issues
+	$(UV_RUN) pre-commit run ruff-check -a --hook-stage manual
+	$(UV_RUN) pre-commit run ruff-format -a
+
+.PHONY: format
+format:  ## Format code with ruff
+	$(UV_RUN) ruff format .
+	$(UV_RUN) ruff check --fix .
+
+.PHONY: interrogate
+interrogate:  ## Check docstring coverage
+	$(UV_RUN) pre-commit run interrogate -a
+
+.PHONY: license
+license:  ## Check license headers
+	$(UV_RUN) python test/_license/header_check.py
+
+# ==============================================================================
+# TESTING
+# ==============================================================================
+
+# Optional arguments to pass to pytest (e.g., PYTEST_ARGS="-k test_foo")
+PYTEST_ARGS ?=
+
+# Testmon flags for CI: use --testmon-nocollect on PRs to select tests without updating db
+PYTEST_TESTMON_FLAGS ?= --testmon --testmon-nocollect
+
+# --- Local targets ---
+
+.PHONY: test
+test:  ## [Local] Run only tests affected by recent changes (fast, uses testmon)
+	$(UV_RUN) pytest --testmon --testmon-nocollect $(PYTEST_ARGS) test/
+
+.PHONY: test-all
+test-all:  ## [Local] Run all tests and rebuild testmon database
+	$(UV_RUN) pytest --testmon $(PYTEST_ARGS) test/
+
+.PHONY: pytest
+pytest:  ## [Local] Run all tests with coverage (no testmon)
+	rm -f .coverage
+	$(UV_RUN) pytest --cov-fail-under=0 --cov=nvalchemi $(PYTEST_ARGS) test/
+
+# --- CI targets ---
+
+.PHONY: testmon-coverage
+testmon-coverage:  ## [CI] Run pytest with testmon and coverage
+	$(UV_RUN) pytest --cov=nvalchemi --cov-report= $(PYTEST_TESTMON_FLAGS) $(PYTEST_ARGS) test/
+	$(UV_RUN) coverage report --show-missing
+	$(UV_RUN) coverage xml -o nvalchemi.coverage.xml
+
+# ==============================================================================
+# COVERAGE
+# ==============================================================================
+
+.PHONY: coverage
+coverage: pytest
+	@echo "Ran coverage"
+	rm -f nvalchemi.coverage.xml; \
+	$(UV_RUN) coverage xml --fail-under=0
+
+.PHONY: coverage-html
+coverage-html:  ## Generate HTML coverage report
+	mkdir htmlcov
+	$(UV_RUN) pytest --cov --cov-report=html:htmlcov/index.html test/;
+	@echo "Coverage report generated at htmlcov/index.html"
+
+# ==============================================================================
+# SONAR ANALYSIS
+# ==============================================================================
+
+SONAR_SCANNER_VERSION ?= 6.2.0.4584
+SONAR_SCANNER_HOME ?= $(HOME)/.sonar/sonar-scanner-$(SONAR_SCANNER_VERSION)-linux-x64
+
+.PHONY: sonar-install
+sonar-install:  ## Download Sonar Scanner locally if not already present
+	@if [ ! -f "$(SONAR_SCANNER_HOME)/bin/sonar-scanner" ]; then \
+		echo "Downloading Sonar Scanner $(SONAR_SCANNER_VERSION)..."; \
+		mkdir -p $(HOME)/.sonar; \
+		curl --create-dirs -sSLo $(HOME)/.sonar/sonar-scanner.zip \
+			https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-$(SONAR_SCANNER_VERSION)-linux-x64.zip; \
+		unzip -o $(HOME)/.sonar/sonar-scanner.zip -d $(HOME)/.sonar/; \
+		rm $(HOME)/.sonar/sonar-scanner.zip; \
+		echo "Sonar Scanner installed at $(SONAR_SCANNER_HOME)"; \
+	else \
+		echo "Sonar Scanner already present at $(SONAR_SCANNER_HOME)"; \
+	fi
+
+.PHONY: sonar
+sonar: sonar-install  ## Run Sonar analysis locally (requires SONAR_TOKEN env var and VPN)
+	@if [ -z "$(SONAR_TOKEN)" ]; then \
+		echo "Error: SONAR_TOKEN is not set. Run: export SONAR_TOKEN=<your-token>"; \
+		exit 1; \
+	fi
+	@if [ ! -f "nvalchemi.coverage.xml" ]; then \
+		echo "Error: nvalchemi.coverage.xml not found. Run: make coverage"; \
+		exit 1; \
+	fi
+	$(SONAR_SCANNER_HOME)/bin/sonar-scanner \
+		-Dsonar.projectKey=GPUSW_ALCHEMI_ALCHEMIStudio_alchemistudio \
+		-Dsonar.sources=. \
+		-Dsonar.host.url=https://sonar.nvidia.com/ \
+		-Dsonar.token=$(SONAR_TOKEN) \
+		-Dsonar.language=py \
+		-Dsonar.python.coverage.reportPaths=nvalchemi.coverage.xml \
+		-Dsonar.coverage.exclusions="test/*,test/**/*,test/**/**/*,examples/*,examples/**/*,examples/**/**/*,benchmarks/*,benchmarks/**/*,benchmarks/**/**/*"
+
+# ==============================================================================
+# DOCUMENTATION
+# ==============================================================================
+
+.PHONY: docs-install-examples
+docs-install-examples:  ## Install example dependencies
+	@echo "Installing example dependencies..."
+	@for req in examples/*/*-requires.txt; do \
+		if [ -f "$$req" ]; then \
+			echo "Installing dependencies from $$req"; \
+			uv pip install -r "$$req"; \
+		fi; \
+	done
+
+.PHONY: docs
+docs: docs-install-examples  ## Build documentation
+	cd docs && make html
+
+.PHONY: docs-clean
+docs-clean:  ## Clean documentation build
+	cd docs && make clean
+	rm -rf docs/examples/
+
+
+.PHONY: docs-rebuild
+docs-rebuild: docs-clean docs  ## Clean and rebuild documentation
+
+# ==============================================================================
+# BUILD & PACKAGING
+# ==============================================================================
+
+.PHONY: build
+build:  ## Build wheel package
+	uv build
+
+.PHONY: clean
+clean:  ## Clean build artifacts
+	rm -rf build/
+	rm -rf dist/
+	rm -rf *.egg-info/
+	rm -rf .coverage*
+	rm -rf htmlcov/
+	rm -rf .pytest_cache/
+	rm -rf .ruff_cache/
+	rm -rf nvalchemi.coverage.xml
+	rm -rf pytest-junit-results.xml
+	find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+
+# ==============================================================================
+# HELP
+# ==============================================================================
+
+.PHONY: help
+help:  ## Show this help message
+	@echo "NVALCHEMI Toolkit - Available Commands"
+	@echo "==========================================="
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'

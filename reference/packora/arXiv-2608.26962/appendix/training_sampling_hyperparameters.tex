@@ -1,0 +1,145 @@
+\section{Training and Sampling Hyperparameters}
+\label{app:training-sampling-hyperparameters}
+
+We summarize the hyperparameters used for \model{}-M and \model{}-L.
+Unless noted, all settings are shared between the two model sizes.
+
+\textbf{Architecture.}
+\Cref{tab:ours-architecture-hyperparameters} specifies model capacity and
+backbone configuration; the two models differ only in width, head count, and
+parameter count.
+
+\begin{table}[H]
+\centering
+\caption{\textbf{Architecture hyperparameters.}
+Model capacity and backbone configuration for \ours{}-M and \ours{}-L.}
+\label{tab:ours-architecture-hyperparameters}
+\begin{tabular}{@{}lrr@{}}
+\toprule
+Parameter & \ours{}-M & \ours{}-L \\
+\midrule
+\multicolumn{3}{@{}l}{\textbf{\emph{Capacity}}} \\
+\quad Parameters       & 88M & 187M \\
+\quad Single width     & 512 & 768 \\
+\quad Pair width       & 128 & 192 \\
+\quad Attention heads  & 8   & 12 \\
+\addlinespace
+\multicolumn{3}{@{}l}{\textbf{\emph{Backbone}}} \\
+\quad Pairmixer blocks & 4 & 4 \\
+\quad DiT blocks       & 16 & 16 \\
+\quad MLP ratio        & 4 & 4 \\
+\quad QK normalization & On & On \\
+\quad Feed-forward network & SwiGLU & SwiGLU \\
+\quad Dropout          & 0 & 0 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Training.}
+\Cref{tab:ours-training-hyperparameters} summarizes the flow-matching,
+optimization, conditioning, and checkpoint-selection settings.
+
+\begin{table}[H]
+\centering
+\caption{\textbf{Training hyperparameters.}
+Flow-matching, optimization, conditioning, and model-selection settings.
+All settings are shared between \ours{}-M and \ours{}-L unless noted.}
+\label{tab:ours-training-hyperparameters}
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{0.39\columnwidth}
+                    >{\raggedright\arraybackslash}p{0.55\columnwidth}@{}}
+\toprule
+Parameter & Value \\
+\midrule
+\multicolumn{2}{@{}l}{\textbf{\emph{Flow matching}}} \\
+\quad Priors & Centered Gaussian fpr $\mathbf{X}$; standard Gaussian for $\boldsymbol{\ell}$ \\
+\quad Interpolant & Linear ($x_t=(1-t)x_0+tx_1$) \\
+\quad Time distribution &
+$0.98\,\operatorname{Beta}(1.9,1.0)+0.02\,\operatorname{Uniform}(0,1)$ \\
+\quad Objective & $L^1$ coordinate--lattice loss \\
+\quad Loss weights & Coordinates 10; lattice 1 \\
+\addlinespace
+\multicolumn{2}{@{}l}{\textbf{\emph{Optimization}}} \\
+\quad Optimizer & Muon for hidden matrices; AdamW otherwise \\
+\quad Learning rate & $10^{-4}$ \\
+\quad Weight decay & 0 (\ours{}-M); $10^{-2}$ (\ours{}-L) \\
+\quad Muon settings & Momentum 0.95; Nesterov; 5 Newton--Schulz steps \\
+\quad AdamW settings & $\beta_1=0.9$, $\beta_2=0.999$, $\epsilon=10^{-8}$ \\
+\quad Schedule & 10{,}000-step linear warmup from zero \\
+\quad Gradient clipping & Global norm, 1.0 \\
+\quad EMA decay & 0.9999 \\
+\addlinespace
+\multicolumn{2}{@{}l}{\textbf{\emph{Conditioning and augmentation}}} \\
+\quad Condition dropout & Template 0.5; stereochemistry 0.5; space group 0.9 \\
+\quad Augmentation & Crystal translation; template rotation and translation \\
+\addlinespace
+\multicolumn{2}{@{}l}{\textbf{\emph{Runtime and selection}}} \\
+\quad Precision & bfloat16 mixed precision \\
+\quad Checkpoint interval & Every 50 epochs \\
+\quad Checkpoint selection & Highest validation $\mathrm{Sol}_C$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Curriculum and batching.}
+We use two-stage training with fixed-shape batches to enable
+\texttt{torch.compile}. Each structure is assigned to the smallest
+atom-count bucket that contains it and padded to that bucket size.
+
+\begin{table}[H]
+\centering
+\caption{\textbf{Two-stage training curriculum and batching.}
+Atom-count buckets and batch sizes used for fixed-shape training across eight GPUs.}
+\label{tab:ours-curriculum-batches}
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{0.39\columnwidth}
+                    >{\raggedright\arraybackslash}p{0.55\columnwidth}@{}}
+\toprule
+Parameter & Value \\
+\midrule
+\multicolumn{2}{@{}l}{\textbf{\emph{Stage 1}}} \\
+\quad Maximum atoms & 300 \\
+\quad Bucket caps & 32, 64, 96, 128, 160, 192, 224, 256, 288, 300 \\
+\quad Per-GPU batch & 16 for every bucket \\
+\quad Global batch & 128 \\
+\addlinespace
+\multicolumn{2}{@{}l}{\textbf{\emph{Stage 2}}} \\
+\quad Maximum atoms & 512 \\
+\quad Additional bucket caps & 320, 352, 384, 416, 448, 480, 512 \\
+\quad Per-GPU batch & 16 ($\leq300$), 14 (320), 11 (352), 9 (384),
+8 (416), 7 (448), 6 (480), 5 (512) \\
+\quad Global batch & 128, 112, 88, 72, 64, 56, 48, and 40, respectively \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Sampling.}
+Both model sizes use the same sampling and conditioning configuration for
+benchmark generation.
+
+\begin{table}[H]
+\centering
+\caption{\textbf{Sampling hyperparameters.}
+Sampling and conditioning configuration used for benchmark generation.}
+\label{tab:ours-sampling-hyperparameters}
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{0.39\columnwidth}
+                    >{\raggedright\arraybackslash}p{0.55\columnwidth}@{}}
+\toprule
+Parameter & Value \\
+\midrule
+\multicolumn{2}{@{}l}{\textbf{\emph{Numerical solver}}} \\
+\quad Solver & EDM--Heun with stochastic churn \\
+\quad Noise schedule & Karras \\
+\quad Sampling steps & 200 \\
+\quad Sigma range & $\sigma_{\min}=0.002$, $\sigma_{\max}=80$ \\
+\quad Schedule exponent & $\rho=7$ \\
+\quad Churn settings & $S_{\mathrm{churn}}=60$, $S_{\min}=0$,
+$S_{\max}=999$, $S_{\mathrm{noise}}=1.003$ \\
+\addlinespace
+\multicolumn{2}{@{}l}{\textbf{\emph{Generation protocol}}} \\
+\quad Weights & EMA \\
+\quad Conditioning & Template and available stereochemistry on; space group off \\
+\quad Template augmentation & Random rotation and translation \\
+\quad Candidates per target & 1{,}000 \\
+\quad Random seed & 42 \\
+\bottomrule
+\end{tabular}
+\end{table}

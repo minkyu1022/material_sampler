@@ -1,0 +1,27 @@
+\subsection{Experimental Setup}
+\label{sec:setup}
+
+\textbf{Dataset.}
+We use the official CLARI training and validation split~\citep{lo2026clari}, derived from the Cambridge Structural Database (CSD)~\citep{groom2016cambridge}. The held-out test set comprises the OXtal Rigid and Flexible benchmarks~\citep{jin2025oxtal}, CSP5~\citep{bardwell2011fifth}, CSP6~\citep{reilly2016sixth}, CSP7~\citep{hunnisett2024seventhranking,hunnisett2024seventhgeneration}, and the CSD Teaching Subset~\citep{battle2010applications,lo2026clari}. To prevent leakage, CLARI excludes all entries from test refcode families and training structures that share an RDKit-sanitizable molecular component with more than seven heavy atoms, then holds out 1{,}000 refcode families for validation.
+
+CLARI limits training and validation unit cells to 512 atoms, yielding 917{,}014 training and 1{,}048 validation entries. Because we add missing hydrogens with the CSD Python API~\citep{sykes2024scripting} before counting atoms, we reapply the 512-atom limit after hydrogen completion, leaving 912{,}807 training and 1{,}047 validation entries. \Cref{app:dataset-statistics} provides detailed dataset statistics.
+
+\textbf{Training and sampling configuration.}
+We train \ours{}-M (88M parameters) and \ours{}-L (187M parameters) using
+Muon~\citep{liu2025muon} for hidden matrix parameters and
+AdamW~\citep{loshchilov2019decoupled} for all remaining parameters. Both models
+use a learning rate of $10^{-4}$, an effective batch size of 128, and an EMA
+decay of $0.9999$; weight decay is 0 for \ours{}-M and $10^{-2}$ for
+\ours{}-L. We also use bfloat16 and train on eight NVIDIA H200 GPUs.
+
+At inference, we condition on stereochemistry when available and on RDKit-generated molecular conformers, reflecting information that is either specified in CSP blind
+tests~\citep{reilly2016sixth} or readily derived from molecular
+graphs~\citep{rdkit}. We do not use space-group conditioning because space groups
+are generally not provided in CSP blind tests.
+We generate candidates with the EDM--Heun sampler~\citep{karras2022elucidating},
+using stochastic churn, $\rho=7$, and 200 sampling steps. Complete
+hyperparameters are provided in
+\Cref{app:training-sampling-hyperparameters}.
+
+\textbf{Two-stage training.}
+To enable faster iteration before scaling to larger structures, we follow the two-stage training of SeedFold~\citep{yi2025seedfold}. In the first stage, we train on crystals with at most 300 atoms; in the second, we expand to all crystals with at most 512 atoms. We save checkpoints every 50 epochs and select the model with the best validation $\mathrm{Sol}_C$.

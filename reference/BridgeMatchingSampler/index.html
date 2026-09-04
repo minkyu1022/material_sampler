@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bridge Matching Sampler (BMS) — Scalable Sampling via Generalized Fixed-Point Diffusion Matching</title>
+<meta name="description" content="Project page for Bridge Matching Sampler (BMS), a scalable diffusion-based sampler for unnormalized densities, with an interactive demo of the fixed-point iteration.">
+
+<!-- Open Graph -->
+<meta property="og:title" content="Bridge Matching Sampler (BMS)">
+<meta property="og:description" content="Scalable Sampling via Generalized Fixed-Point Diffusion Matching. ICML 2026.">
+<meta property="og:image" content="assets/bms_illustration.png">
+<meta property="og:type" content="website">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="site/style.css">
+
+<!-- MathJax -->
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['\\(', '\\)']], displayMath: [['$$', '$$'], ['\\[', '\\]']] },
+  svg: { fontCache: 'global' }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js" async></script>
+</head>
+<body>
+
+<!-- ===================== NAV ===================== -->
+<header class="nav">
+  <div class="nav-inner">
+    <a class="nav-brand" href="#top">BMS</a>
+    <nav class="nav-links">
+      <a href="#overview">Overview</a>
+      <a href="#method">Method</a>
+      <a href="#sampler">Live sampler</a>
+      <a href="#bibtex">Cite</a>
+    </nav>
+  </div>
+</header>
+
+<main id="top">
+
+<!-- ===================== HERO ===================== -->
+<section class="hero">
+  <p class="venue">ICML 2026 &middot; Seoul, South Korea</p>
+  <h1 class="title">Bridge Matching Sampler</h1>
+  <p class="subtitle">Scalable Sampling via Generalized Fixed-Point Diffusion Matching</p>
+
+  <ul class="authors">
+    <li><a href="mailto:denis.blessing@kit.edu">Denis Blessing</a><sup>1</sup></li>
+    <li>Lorenz Richter<sup>2,3</sup></li>
+    <li>Julius Berner<sup>4</sup></li>
+    <li>Egor Malitskiy<sup>1</sup></li>
+    <li>Gerhard Neumann<sup>1</sup></li>
+  </ul>
+  <p class="affil">
+    <sup>1</sup>Karlsruhe Institute of Technology &nbsp;
+    <sup>2</sup>Zuse Institute Berlin &nbsp;
+    <sup>3</sup>dida &nbsp;
+    <sup>4</sup>NVIDIA
+  </p>
+
+  <div class="cta">
+    <a class="btn btn-primary" href="docs/bms_paper.pdf"><span class="ico">📄</span> Paper</a>
+    <a class="btn" href="https://github.com/DenisBless/BridgeMatchingSampler"><span class="ico">⌨</span> Code</a>
+    <a class="btn" href="#bibtex"><span class="ico">❝</span> BibTeX</a>
+  </div>
+
+  <figure class="hero-fig">
+    <img src="assets/bms_illustration.png" alt="One outer iteration of the BMS fixed-point algorithm: simulate the controlled SDE, resample the prior endpoint to form an independent coupling, sample a Brownian bridge, and regress the Markovian control onto the target drift.">
+    <figcaption>One outer iteration of BMS: <b>(1)</b> simulate the controlled SDE from the prior, <b>(2)</b> resample the prior endpoint to form an <em>independent coupling</em>, <b>(3)</b> sample a Brownian bridge in closed form, and <b>(4)</b> regress the Markovian control onto the path-dependent target drift. Iterating drives the time marginals toward&nbsp;\(p_\text{target}\).</figcaption>
+  </figure>
+</section>
+
+<!-- ===================== TL;DR ===================== -->
+<section id="overview" class="section">
+  <h2>TL;DR</h2>
+  <p class="lead">
+    BMS learns a stochastic transport map from an arbitrary prior to an unnormalized
+    target using a <b>single, scalable least-squares objective</b> and a <b>damped
+    fixed-point iteration</b>. It needs only the target <em>score</em> (no samples, no
+    importance weights), avoids the restrictive priors and unstable alternating
+    optimization of prior bridge samplers, and <b>scales to thousands of dimensions
+    while preserving mode diversity</b>.
+  </p>
+
+  <div class="cards">
+    <div class="card">
+      <div class="card-k">One objective</div>
+      <div class="card-v">A stable least-squares "matching" loss &mdash; no importance sampling, no min-max games.</div>
+    </div>
+    <div class="card">
+      <div class="card-k">Any prior</div>
+      <div class="card-v">Independent couplings free the method from the memoryless / Dirac-prior restrictions of earlier samplers.</div>
+    </div>
+    <div class="card">
+      <div class="card-k">Mode-covering</div>
+      <div class="card-v">The fixed point is a forward-KL Markovian projection &mdash; damping keeps every mode populated.</div>
+    </div>
+    <div class="card">
+      <div class="card-k">Scales</div>
+      <div class="card-v">Stable up to \(d=2500\) synthetic and on all-atom peptides (ALA2/ALA4), state of the art.</div>
+    </div>
+  </div>
+
+  <h3>Abstract</h3>
+  <p class="abstract">
+    Sampling from unnormalized densities using diffusion models has emerged as a
+    powerful paradigm. However, while recent approaches that use least-squares
+    "matching" objectives have improved scalability, they often necessitate
+    significant trade-offs, such as restricting prior distributions or relying on
+    unstable optimization schemes. By generalizing these methods as special forms
+    of fixed-point iterations rooted in Nelson's relation, we develop a new method
+    that addresses these limitations, called <b>Bridge Matching Sampler (BMS)</b>.
+    Our approach enables learning a stochastic transport map between arbitrary prior
+    and target distributions with a single, scalable, and stable objective.
+    Furthermore, we introduce a damped variant of this iteration that incorporates a
+    regularization term to mitigate mode collapse and further stabilize training.
+    Empirically, we demonstrate that our method enables sampling at unprecedented
+    scales while preserving mode diversity, achieving state-of-the-art results on
+    complex synthetic densities and high-dimensional molecular benchmarks.
+  </p>
+</section>
+
+<!-- ===================== METHOD ===================== -->
+<section id="method" class="section">
+  <h2>The method, step by step</h2>
+
+  <p>
+    We want to sample from a target \(p_\text{target}(x) = \rho(x)/\mathcal{Z}\) where
+    we can evaluate \(\rho\) pointwise but the normalizer \(\mathcal{Z}\) is
+    intractable. BMS learns a control \(u\) so that the <b>controlled SDE</b>
+    with constant diffusion coefficient \(\sigma\)
+  </p>
+  $$\mathrm{d}X_t = \sigma\,u(X_t,t)\,\mathrm{d}t + \sigma\,\mathrm{d}B_t,\qquad X_0\sim p_\text{prior}$$
+  <p>
+    has terminal marginal \(X_T \sim p_\text{target}\). The trick is to view this as a
+    <b>fixed-point iteration over path measures</b> that alternates between building a
+    valid bridge process and "Markovianizing" it. Each outer iteration is four steps.
+  </p>
+
+  <ol class="steps">
+    <li>
+      <span class="step-n">1</span>
+      <div>
+        <b>Simulate &amp; couple.</b> Draw \(X_0\sim p_\text{prior}\) and integrate the
+        <em>current</em> control to its endpoint \(X_T\). Then pair \(X_T\) with a
+        <em>fresh, independent</em> prior sample \(X_0'\sim p_\text{prior}\) &mdash; the
+        BMS <b>independent coupling</b> \(\Pi^i_{0,T}=p_\text{prior}\otimes\mathbb{P}^{u_i}_T\).
+      </div>
+    </li>
+    <li>
+      <span class="step-n">2</span>
+      <div>
+        <b>Bridge in closed form.</b> Conditioned on \((X_0',X_T)\), sample an
+        intermediate state \(X_t\) from the Brownian bridge \(\mathbb{P}_{t\mid 0,T}\)
+        directly &mdash; <em>no trajectory storage</em>:
+        $$X_t \sim \mathcal{N}\!\Big((1-\gamma_t)\,X_0' + \gamma_t\,X_T,\; \sigma^2\,\frac{t(T-t)}{T}\Big),\quad \gamma_t=\frac{t}{T}.$$
+      </div>
+    </li>
+    <li>
+      <span class="step-n">3</span>
+      <div>
+        <b>Target drift (generalized target score identity).</b> The path-dependent
+        drift that induces the target path measure is available in closed form from
+        only the prior and target <em>scores</em>:
+        $$\sigma^{-1}\,\xi(X,t)=\frac{1-c(t)}{1-\gamma_t}\,\nabla\!\log p_\text{prior}(X_0)\;+\;\frac{c(t)}{\gamma_t}\,\nabla\!\log p_\text{target}(X_T)\;-\;\nabla\!\log \mathbb{P}_{t\mid 0}(X_t\mid X_0).$$
+        where \(c(t)\in(0,1]\) is a free control variate and \(\mathbb{P}_{t\mid 0}\) is
+        the forward reference transition \(X_t\mid X_0\sim\mathcal{N}(X_0,\sigma^2 t)\).
+      </div>
+    </li>
+    <li>
+      <span class="step-n">4</span>
+      <div>
+        <b>Markovianize.</b> Regress a Markovian control onto the target drift with a
+        plain least-squares loss &mdash; the conditional expectation
+        \(\mathbb{E}_{\Pi^i}[\xi(X,t)\mid X_t=x]\). This defines the
+        <b>fixed-point operator</b> \(\Phi\):
+        $$u_{i+1}=\Phi(u_i):=\arg\min_{u}\;\mathbb{E}_{\Pi^i}\!\int_0^T \tfrac12\,\lVert \xi(X,t)-u(X_t,t)\rVert^2\,\mathrm{d}t.$$
+      </div>
+    </li>
+  </ol>
+
+  <div class="callout">
+    <h3>Damping</h3>
+    <p>
+      Instead of applying the operator \(\Phi\) fully, BMS takes a <b>damped</b>
+      step that pulls toward the previous iterate \(u_i\):
+    </p>
+    $$u_{i+1}=\alpha\,\Phi(u_i)+(1-\alpha)\,u_i,\qquad \eta=\frac{1-\alpha}{\alpha}.$$
+    <p>
+      Equivalently, the regression gains an \(L^2\) penalty \(\eta\,\lVert u-u_i\rVert^2\)
+      toward \(u_i\). This reduces the variance of each update, prevents mode collapse,
+      and is decisive in high dimensions. You can feel exactly what \(\eta\) does in the
+      <a href="#sampler">live sampler</a> below.
+    </p>
+  </div>
+</section>
+
+<!-- ===================== INTERACTIVE: SAMPLER ===================== -->
+<section id="sampler" class="section">
+  <h2>Interactive &middot; Watch the fixed point converge</h2>
+  <p>
+    This is a real, in-browser 1D Bridge Matching Sampler &mdash; the same scheme as the
+    paper. The prior is \(\mathcal{N}(0,1)\) (blue); the target is a bimodal density
+    (red). Each <b>Step</b> runs one full outer iteration: simulate, form the independent
+    coupling, sample bridges, and Markovianize the control via a conditional-expectation
+    regression. The left panel shows the learned drift field \(u(x,t)\) with a few
+    transported trajectories; the right panel shows the terminal samples \(X_T\) against
+    the target.
+  </p>
+
+  <div class="demo demo-wide">
+    <div class="panels">
+      <figure>
+        <canvas id="fieldCanvas" width="430" height="340" aria-label="Learned drift field and trajectories"></canvas>
+        <figcaption>Control \(u(x,t)\): blue \(\!-\!\) / red \(+\), with transported paths prior&nbsp;\(\to\)&nbsp;target.</figcaption>
+      </figure>
+      <figure>
+        <canvas id="histCanvas" width="430" height="340" aria-label="Terminal sample distribution vs target"></canvas>
+        <figcaption>Terminal samples \(X_T\) (bars) vs target (red) and prior (blue).</figcaption>
+      </figure>
+    </div>
+
+    <div class="controls">
+      <button id="stepBtn" class="mini primary">Step ▷</button>
+      <button id="playBtn" class="mini">Play ▶</button>
+      <button id="resetBtn" class="mini">Reset ↺</button>
+      <span class="iter">iteration <b id="iterVal">0</b></span>
+      <label class="grow">damping&nbsp;\(\eta\) <span class="val" id="etaVal">10</span> <span class="muted">(\(\alpha=\)<span id="alphaVal">0.09</span>)</span>
+        <input type="range" id="etaSlider" min="0" max="20" step="0.5" value="10">
+      </label>
+    </div>
+    <p class="hint">
+      Try it: set \(\eta=0\) (no damping) and Play &mdash; the updates jump around and can
+      tilt toward one mode. Now raise \(\eta\) and Reset &mdash; convergence is smooth and
+      both modes stay populated. That is the damped fixed point.
+    </p>
+  </div>
+</section>
+
+<!-- ===================== BIBTEX ===================== -->
+<section id="bibtex" class="section">
+  <h2>Citation</h2>
+  <div class="bibtex-wrap">
+    <button class="copy" id="copyBtn">Copy</button>
+    <pre id="bibtex">@inproceedings{blessing2026bridge,
+  title     = {Bridge Matching Sampler: Scalable Sampling via Generalized Fixed-Point Diffusion Matching},
+  author    = {Blessing, Denis and Richter, Lorenz and Berner, Julius and Malitskiy, Egor and Neumann, Gerhard},
+  booktitle = {Proceedings of the 43rd International Conference on Machine Learning (ICML)},
+  year      = {2026},
+}</pre>
+  </div>
+</section>
+
+<footer class="footer">
+  <p class="micro">Correspondence: <a href="mailto:denis.blessing@kit.edu">denis.blessing@kit.edu</a></p>
+</footer>
+
+</main>
+
+<script src="site/sampler.js" defer></script>
+<script>
+  // copy bibtex
+  document.getElementById('copyBtn').addEventListener('click', async () => {
+    const txt = document.getElementById('bibtex').innerText;
+    try { await navigator.clipboard.writeText(txt);
+      const b = document.getElementById('copyBtn'); b.textContent = 'Copied!';
+      setTimeout(() => b.textContent = 'Copy', 1400);
+    } catch (e) {}
+  });
+  // active nav highlight
+  const navlinks = [...document.querySelectorAll('.nav-links a')];
+  const obs = new IntersectionObserver((entries) => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        const id = e.target.id;
+        navlinks.forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + id));
+      }
+    });
+  }, { rootMargin: '-40% 0px -55% 0px' });
+  document.querySelectorAll('section[id]').forEach(s => obs.observe(s));
+</script>
+</body>
+</html>

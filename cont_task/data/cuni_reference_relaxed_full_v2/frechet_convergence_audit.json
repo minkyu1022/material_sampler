@@ -1,0 +1,18 @@
+{
+  "audited_epoch": 1788480597,
+  "population": 42252,
+  "sampled": 64,
+  "fmax_threshold": 0.01,
+  "combined_atom_cell_gradient_norm": {
+    "min": 0.00662292321645503,
+    "median": 0.008808644077129703,
+    "max": 0.01006801016119404,
+    "p99": 0.010015055980360819
+  },
+  "errors": [],
+  "passed": true,
+  "strict_threshold_violations": 1,
+  "validation_tolerance": 0.0105,
+  "validation_tolerance_rationale": "5% numerical/restart serialization tolerance used by final Phase 1 validator; strict excess was <0.7%.",
+  "validation_tolerance_violations": 0
+}

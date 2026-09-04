@@ -1,0 +1,638 @@
+<p align="center">
+  <img src="media/Crystalite logo-03.png" alt="Crystalite" width="400" />
+</p>
+
+---
+>[!WARNING]
+>This is an early release of the `crystalite` codebase. It has undergone a major refactor so everything might not be working 100% just yet. We will be updating this repo regularly so please feel free to reach out if you encounter any issues.
+
+
+`crystalite` is a codebase for tokenized crystal representations, EDM-based generation, and evaluation for two workflows:
+
+- DNG: de novo generation of atom types, fractional coordinates, and lattice parameters
+- CSP: crystal structure prediction with atom types fixed from a target composition/structure
+
+Both workflows use the same main training entrypoint, `src/train_crystalite.py`, and diverge by flags and evaluation metrics.
+
+## Table of Contents
+
+- [Table of Contents](#table-of-contents)
+- [Project Overview](#project-overview)
+- [Environment Setup](#environment-setup)
+- [Data and Representation](#data-and-representation)
+  - [Atom representations](#atom-representations)
+- [Pretrained DNG Checkpoint](#pretrained-dng-checkpoint)
+  - [Sampling from the pretrained checkpoint](#sampling-from-the-pretrained-checkpoint)
+  - [Full DNG evaluation with NequIP relaxation](#full-dng-evaluation-with-nequip-relaxation)
+  - [Reference metrics](#reference-metrics)
+- [Pretrained CSP Checkpoints](#pretrained-csp-checkpoints)
+  - [CSP reference metrics](#csp-reference-metrics)
+- [Training Workflows](#training-workflows)
+  - [DNG training](#dng-training)
+  - [CSP training](#csp-training)
+- [Evaluation Workflows](#evaluation-workflows)
+  - [DNG train-time evaluation](#dng-train-time-evaluation)
+  - [CSP train-time evaluation](#csp-train-time-evaluation)
+  - [DNG post-training checkpoint evaluation](#dng-post-training-checkpoint-evaluation)
+  - [Offline checkpoint sampling](#offline-checkpoint-sampling)
+  - [CSP post-training evaluation](#csp-post-training-evaluation)
+- [Thermo Backends](#thermo-backends)
+  - [Phase diagram (hull)](#phase-diagram-hull)
+  - [NequIP OAM-L setup](#nequip-oam-l-setup)
+- [Outputs and Artifacts](#outputs-and-artifacts)
+
+## Project Overview
+
+The current model stack is an EDM sampler paired with a transformer trunk and optional GEM-based geometry attention bias. GEM stands for Geometry Enhancement Module: it injects learned distance and/or edge-conditioned attention bias into the transformer when `--use_distance_bias` or `--use_edge_bias` is enabled. The repo is centered on MP20-style tokenized crystal data plus evaluation utilities for:
+
+- train-time sampling metrics
+- post-training DNG checkpoint evaluation
+- optional thermo stability checks with CHGNet or NequIP
+
+At a glance:
+
+| Mode | Enable with | Predicts | Main train-time evaluation |
+| --- | --- | --- | --- |
+| DNG | default | atom types + coords + lattice | validity, Wasserstein, novelty/UN, SUN/MSUN, thermo |
+| CSP | `--csp` | coords + lattice with fixed atom types | match rate, RMS, optional precise top-k |
+
+Advanced ablations, grids, and post-hoc utilities live under `scripts/`. This README focuses on the current main workflows rather than exhaustively documenting those scripts.
+
+## Environment Setup
+
+The repo targets Python 3.12 and is set up with `uv`.
+
+```bash
+uv python install 3.12
+uv sync
+```
+
+Notes:
+
+- `pyproject.toml` pins PyTorch/Torchvision through `uv` indexes: CPU wheels outside Linux, CUDA 12.8 wheels on Linux.
+- `uv sync` installs both CHGNet and the NequIP/TorchSim stack, but NequIP thermo evaluation still requires a compiled `.nequip.pt2` model if you choose `--thermo_mlip nequip`.
+- Use `uv sync --group dev` if you also want the dev dependencies such as `pytest`.
+
+## Data and Representation
+
+The core dataset class is `src.data.mp20_tokens.MP20Tokens`. Each structure is represented as:
+
+- `A0`: `(NMAX,)` atom types, padded with `0`
+- `F1`: `(NMAX, 3)` fractional coordinates
+- `Y1`: `(6,)` lattice representation
+- `pad_mask`: `(NMAX,)`, `True` where padded
+
+Minimal example:
+
+```python
+from src.data.mp20_tokens import MP20Tokens
+
+ds = MP20Tokens(
+    root="data/mp20",
+    augment_translate=True,
+    split="train",
+    nmax=20,
+)
+item = ds[0]
+```
+
+Dataset presets are selected with `--dataset_name` and currently include `mp20`, `mpts_52`,  `alex_mp20`, and `custom`. `--nmax` is resolved from the dataset preset unless overridden explicitly.
+
+Raw dataset files for `mpts_52`, `alex_mp20`, and `mp20` are available from [HuggingFace](https://huggingface.co/datasets/joshrosie/crystalite-datasets/tree/main).
+
+The datasets can be downloaded directly using:
+```python
+uv run python src/data/download_datasets.py --datasets all
+```
+
+### Atom representations
+
+For the atom-type channel, the current training code supports multiple element representations through `--type_encoding`:
+
+- `atomic_number`: direct element-channel encoding, used by default
+- `subatomic_tokenizer_raw`: hand-crafted subatomic-tokenizer descriptor features
+- `subatomic_tokenizer_pca`: default PCA-compressed subatomic-tokenizer descriptor (`subatomic_tokenizer_pca_24`)
+- `subatomic_tokenizer_pca_8`, `subatomic_tokenizer_pca_16`, `subatomic_tokenizer_pca_24`: explicit PCA dimensionality presets
+
+These representations affect how atom types are encoded and decoded inside the EDM model. In DNG mode they shape the sampled atom-type path; in CSP mode atom types are fixed, but the chosen representation still determines the internal type features seen by the model.
+
+## Pretrained DNG Checkpoint
+
+A pretrained DNG checkpoint is available on Hugging Face and strict-loads into the current `CrystaliteModel`:
+
+> [joshrosie/crystalite-datasets/best.pt](https://huggingface.co/datasets/joshrosie/crystalite-datasets/blob/main/best.pt)
+
+It was trained on MP20 with `subatomic_tokenizer_pca_16` atom typing. The checkpoint carries `model_args`, EDM/sampler parameters, and EMA weights, all of which are read automatically by `src/sample_crystalite_ckpt.py` and `src/eval_crystalite_ckpt.py`. Use `--sample_mode ema` for normal sampling and evaluation.
+
+Key configuration:
+
+```text
+type_encoding: subatomic_tokenizer_pca_16
+type_dim: 16
+d_model: 512
+n_heads: 16
+n_layers: 14
+ema_decay: 0.9999
+```
+
+### Sampling from the pretrained checkpoint
+
+```bash
+CKPT=/path/to/best.pt
+
+python src/sample_crystalite_ckpt.py \
+  --checkpoint "$CKPT" \
+  --dataset_name mp20 \
+  --data_root data/mp20 \
+  --nmax 20 \
+  --num_samples 512 \
+  --sample_chunk_size 128 \
+  --sample_seed 123 \
+  --sample_num_steps 150 \
+  --sample_mode ema \
+  --atom_count_strategy empirical \
+  --bf16 \
+  --output_dir outputs/pretrained_pca16/samples \
+  --save_pt \
+  --save_cifs \
+  --cif_limit 512
+```
+
+`--atom_count_strategy empirical` reads MP20 to sample realistic atom counts. To skip dataset access entirely, pass `--atom_count_strategy fixed --fixed_num_atoms <N>` instead.
+
+### Full DNG evaluation with NequIP relaxation
+
+This is a complete metrics run with NequIP-driven thermodynamic stability:
+
+```bash
+CKPT=/path/to/best.pt
+THERMO_PPD_MP=mp_02072023/2023-02-07-ppd-mp.pkl
+NEQUIP_MODEL=data/mlip/nequip/NequIP-OAM-L-ase.nequip.zip
+
+python src/eval_crystalite_ckpt.py \
+  --checkpoint "$CKPT" \
+  --dataset_name mp20 \
+  --data_root data/mp20 \
+  --nmax 20 \
+  --num_samples 512 \
+  --sample_chunk_size 128 \
+  --sample_seed 123 \
+  --sample_num_steps 150 \
+  --sample_mode ema \
+  --atom_count_strategy empirical \
+  --eval_jobs 16 \
+  --bf16 \
+  --compute_novelty \
+  --compute_wasserstein \
+  --compute_structure_stats \
+  --thermo_count 512 \
+  --thermo_stability_batch 64 \
+  --thermo_relax_steps 200 \
+  --thermo_stability_device cuda \
+  --thermo_mlip nequip \
+  --thermo_ehull_method mp2020_like \
+  --thermo_ppd_mp "$THERMO_PPD_MP" \
+  --nequip_compile_path "$NEQUIP_MODEL" \
+  --nequip_relax_mode sequential \
+  --nequip_optimizer FIRE \
+  --nequip_cell_filter frechet \
+  --nequip_fmax 0.005 \
+  --nequip_max_force_abort 1000000 \
+  --report_dir outputs/pretrained_pca16/eval_reports \
+  --run_name pretrained_pca16_eval512 \
+  --save_samples_pt \
+  --save_sun_samples
+```
+
+Notes:
+
+- A NequIP saved-model `.zip` (or `nequip.net:mir-group/NequIP-OAM-L:0.1`) with `--nequip_relax_mode sequential` is a portable alternative to a compiled `.nequip.pt2` artifact, and avoids `GLIBC_2.38` issues seen on some clusters.
+- The phase-diagram pickle (`2023-02-07-ppd-mp.pkl`) is the same one described in [Phase diagram (hull)](#phase-diagram-hull).
+
+### Reference metrics
+
+512 samples, NequIP relaxation, sequential mode, `sample_seed: 123`:
+
+```text
+valid_rate:               0.828
+unique_rate:              0.994
+novel_rate:               0.789
+un_rate:                  0.787
+SUN:                      0.111
+MSUN:                     0.558
+sun_count:                46
+nequip stability:         0.141
+nequip metastability:     0.709
+nequip e_above_hull_mean: 0.073
+wdist_density_atomic:     0.001
+wdist_nary:               0.137
+```
+
+## Pretrained CSP Checkpoints
+
+Two pretrained CSP checkpoints are available on Hugging Face (alongside the DNG checkpoint) and strict-load into the current `CrystaliteModel`:
+
+> [joshrosie/crystalite-datasets/csp_mp20_best.pt](https://huggingface.co/datasets/joshrosie/crystalite-datasets/blob/main/csp_mp20_best.pt)
+>
+> [joshrosie/crystalite-datasets/csp_mpts52_best.pt](https://huggingface.co/datasets/joshrosie/crystalite-datasets/blob/main/csp_mpts52_best.pt)
+
+Both were trained with `atomic_number` atom typing for crystal structure prediction (atom types are held fixed; the model predicts coordinates + lattice). The checkpoints carry `model_args`, EDM/sampler parameters, and EMA weights, all read automatically by `src/eval_csp_ckpt.py`. Use `--sample_mode ema` for evaluation.
+
+Key configuration:
+
+```text
+                     MP-20            MPTS-52
+type_encoding:       atomic_number    atomic_number
+type_dim:            95               95
+d_model:             1024             1024
+n_heads:             16               16
+n_layers:            14               14
+use_distance_bias:   true             false
+use_edge_bias:       true             true
+ema_decay:           0.99999          0.9999
+checkpoint_step:     1400000          2300000
+```
+
+### CSP reference metrics
+
+Full test split, EMA weights, `num_steps: 400`, `rho: 7`, `S_churn: 30`, `S_noise: 1.003`, coordinate and lattice anti-annealing both set to `4.0` (`--aa_rho_coords_values 4 --aa_rho_lattice_values 4`):
+
+```text
+                   MP-20      MPTS-52
+match_rate:        0.661      0.317
+mean RMSD:         0.033      0.072
+matched / total:   5975/9045  2570/8096
+```
+
+Reproduce (per dataset) with the canonical command in [CSP post-training evaluation](#csp-post-training-evaluation); MPTS-52 uses `--data_root data/mpts_52 --dataset_name mpts_52`. The checkpoints store `aa_rho_lattice=0`, so pass `--aa_rho_lattice_values 4` explicitly to match the numbers above.
+
+## Training Workflows
+
+### DNG training
+
+Canonical DNG run:
+
+```bash
+python src/train_crystalite.py \
+  --data_root data/mp20 \
+  --dataset_name mp20 \
+  --output_dir outputs/dng_mp20 \
+  --sample_frequency 1000 \
+  --sample_count 2048 \
+  --best_ckpt
+```
+
+Behavior:
+
+- atom types, coordinates, and lattice are all sampled
+- train-time sampling logs DNG metrics
+- `--best_ckpt` tracks the best checkpoint using the configured DNG metric policy
+
+PCA-16 EDM training recipe:
+
+```bash
+python src/train_crystalite.py \
+  --data_root data/mp20 \
+  --dataset_name mp20 \
+  --output_dir outputs/dng_mp20_pca16 \
+  --nmax 20 \
+  --batch_size 128 \
+  --bf16 \
+  --max_steps 2500000 \
+  --type_encoding subatomic_tokenizer_pca_16 \
+  --d_model 512 \
+  --n_heads 16 \
+  --n_layers 14 \
+  --use_edge_bias \
+  --edge_bias_n_freqs 12 \
+  --edge_bias_hidden_dim 256 \
+  --edge_bias_n_rbf 32 \
+  --lattice_embed_mode mlp \
+  --lattice_repr ltri \
+  --loss_weights 16 150 5 \
+  --coord_loss_mode frac_mse \
+  --sigma_data_type 0.3 \
+  --sigma_data_coord 0.3 \
+  --sigma_data_lattice 0.3 \
+  --best_ckpt
+```
+
+These flags intentionally override the generic CLI defaults. In particular, use the explicit `subatomic_tokenizer_pca_16` preset for PCA-16 training; the shorthand `subatomic_tokenizer_pca` resolves to PCA-24.
+
+### CSP training
+
+Canonical CSP run:
+
+```bash
+python src/train_crystalite.py \
+  --csp \
+  --data_root data/mp20 \
+  --dataset_name mp20 \
+  --output_dir outputs/csp_mp20 \
+  --sample_frequency 1000 \
+  --sample_count 256 \
+  --best_ckpt
+```
+
+Behavior:
+
+- atom types are fixed from the target structures
+- CSP mode zeroes the type-loss path and evaluates reconstruction quality instead of DNG novelty metrics
+- precise CSP sampling can report best-of-k metrics via `--csp_precise_topk_list` and `--csp_precise_topk_samples`
+
+CSP EDM training recipe (reproduces the pretrained MP-20 CSP checkpoint):
+
+```bash
+python src/train_crystalite.py \
+  --csp \
+  --data_root data/mp20 \
+  --dataset_name mp20 \
+  --output_dir outputs/csp_mp20 \
+  --nmax 20 \
+  --bf16 \
+  --max_steps 1400000 \
+  --type_encoding atomic_number \
+  --batch_size 128 \
+  --d_model 1024 \
+  --n_heads 16 \
+  --n_layers 14 \
+  --use_distance_bias \
+  --use_edge_bias \
+  --edge_bias_n_freqs 12 \
+  --edge_bias_hidden_dim 256 \
+  --edge_bias_n_rbf 32 \
+  --gem_per_layer \
+  --lattice_embed_mode mlp \
+  --lattice_repr ltri \
+  --coord_loss_mode frac_mse \
+  --loss_weights 10 20 10 \
+  --sigma_data_coord 0.3 \
+  --sigma_data_lattice 0.3 \
+  --ema_decay 0.99999 \
+  --sample_frequency 1000 \
+  --sample_count 256 \
+  --best_ckpt
+```
+
+Like the DNG recipe, these flags intentionally override the generic CLI defaults so the architecture and training objective match the released checkpoint; leaving any of them at their defaults produces a different model that will not strict-load against `csp_mp20_best.pt` (see [Pretrained CSP Checkpoints](#pretrained-csp-checkpoints)). The first value of `--loss_weights` (the type weight) is ignored in CSP mode because the type-loss path is zeroed; only the coordinate and lattice terms are trained. `--max_steps` is set to the step at which the best checkpoint was saved; with `--best_ckpt` the run keeps the best checkpoint regardless.
+
+For the larger `csp_mpts52_best.pt` checkpoint, keep the same base recipe and change the dataset plus the three hyperparameters that differ in that config:
+
+```bash
+  --data_root data/mpts_52 \
+  --dataset_name mpts_52 \
+  --max_steps 2300000 \
+  --ema_decay 0.9999 \
+  # drop --use_distance_bias (MPTS-52 uses edge bias only)
+```
+
+## Evaluation Workflows
+
+### DNG train-time evaluation
+
+When sampling is enabled during training, DNG can log:
+
+- validity metrics
+- Wasserstein distribution distances
+- novelty, unique+novel rate, and related DNG metrics
+- SUN/MSUN if thermo relaxation is enabled and `sun_k` is positive
+- standalone thermo metrics and generated-vs-reference thermo comparisons
+
+These metrics are driven by the train-time sampling settings such as:
+
+- `--sample_frequency`
+- `--sample_count`
+- `--sample_mode`
+- `--sample_num_steps`
+
+Sampler and sampling-metric flags are separate from the gradient-training loss. `--sample_frequency 0` disables train-time sampling; when sampling is disabled, the remaining flags in this block are recorded in config but not executed during training. Set `--sample_frequency` to a positive step interval to run the sampler and metrics during training.
+
+```bash
+--sample_frequency 0
+--sample_count 2048
+--sample_num_steps 150
+--sample_chunk_size 2048
+--sample_vis_count 5
+--sample_compute_novelty
+--sample_novelty_limit -1
+--rho 7
+--S_churn 60
+--S_noise 1.003
+--aa_rho_coords 10
+--aa_rho_lattice 10
+```
+
+Here `--sample_*` controls train-time sample generation and sample metrics, `--rho`/`--S_*` control the EDM sampler schedule and stochastic churn, and `--aa_rho_*` controls anti-annealing drift during sampling.
+
+### CSP train-time evaluation
+
+In CSP mode, train-time sampling logs reconstruction metrics rather than DNG novelty metrics:
+
+- match rate
+- mean RMS distance
+- optional precise top-k metrics
+
+### DNG post-training checkpoint evaluation
+
+The first-class standalone checkpoint-eval entrypoint is `src/eval_crystalite_ckpt.py`, which is currently DNG-oriented.
+
+Canonical DNG checkpoint eval:
+
+```bash
+python src/eval_crystalite_ckpt.py \
+  --train_output_dir outputs/dng_mp20 \
+  --checkpoint_preference best \
+  --num_samples 10000 \
+  --sample_mode ema
+```
+
+This path can compute:
+
+- validity / composition / structure validity
+- diagnostic metrics
+- Wasserstein distribution metrics
+- novelty / unique+novel metrics
+- optional thermo metrics and SUN sample export
+
+### Offline checkpoint sampling
+
+If you only want to sample structures from a checkpoint without running the evaluator stack, use `src/sample_crystalite_ckpt.py`.
+
+Minimal offline sampling:
+
+```bash
+python src/sample_crystalite_ckpt.py \
+  --checkpoint outputs/dng_mp20/checkpoints/best.pt \
+  --num_samples 256 \
+  --output_dir outputs/dng_mp20/offline_demo
+```
+
+Behavior:
+
+- loads the checkpoint directly and samples with regular or EMA weights
+- writes `samples.pt` plus `samples.xyz` (extxyz) by default
+- can optionally write per-sample CIFs with `--save_cifs`
+- can run without dataset access; in that case atom counts fall back to `nmax` unless you pass `--fixed_num_atoms`
+
+If the training dataset is available locally, the script can also reuse it for empirical atom-count sampling and train-split element masking:
+
+```bash
+python src/sample_crystalite_ckpt.py \
+  --checkpoint outputs/dng_mp20/checkpoints/best.pt \
+  --num_samples 256 \
+  --atom_count_strategy empirical \
+  --data_root data/mp20 \
+  --dataset_name mp20
+```
+
+### CSP post-training evaluation
+
+The first-class standalone CSP checkpoint-eval entrypoint is `src/eval_csp_ckpt.py` (the CSP analogue of `src/eval_crystalite_ckpt.py`). It holds each target composition's atom types fixed, samples coordinates + lattice, and reports `pymatgen` `StructureMatcher` match-rate and RMSD against the ground-truth structures of a dataset split. It reuses the same sampling + matching machinery as CSP train-time evaluation, so standalone numbers line up with the `csp_val_match_rate` reported during training.
+
+Canonical CSP checkpoint eval (full test split):
+
+```bash
+python src/eval_csp_ckpt.py \
+  --checkpoint outputs/csp_mp20/checkpoints/best.pt \
+  --data_root data/mp20 \
+  --dataset_name mp20 \
+  --split test \
+  --num_samples 0 \
+  --sample_mode ema \
+  --aa_rho_coords_values 4 \
+  --aa_rho_lattice_values 4 \
+  --output_csv outputs/csp_eval/mp20_test.csv
+```
+
+This path computes:
+
+- match-rate and mean matched RMSD (single-candidate)
+- optional best-of-k metrics (`--csp_precise_topk_list 1 20 --csp_precise_topk_samples N`)
+- an anti-annealing grid ablation: pass multiple values to `--aa_rho_coords_values` / `--aa_rho_lattice_values` and one CSV row is written per cell of the cross product
+
+Key flags:
+
+- checkpoint resolution mirrors the DNG CLI: pass `--checkpoint <path>` directly, or `--train_output_dir <run>` with `--checkpoint_preference {auto,best,final,step_latest,epoch_latest}`
+- `--target_selection {sequential,random}` chooses the evaluated targets (sequential = first `--num_samples`; `0` = full split)
+- `--seed_mode step_offset` reproduces train-time seeding (`base_seed = sample_seed + step`); use `fixed` to seed with `--sample_seed` alone
+- sampler settings (`--sample_num_steps`, `--rho`, `--s_churn`, `--s_min/--s_max/--s_noise`, `--bf16`) default to the checkpoint's `model_args` and can be overridden
+- `--save_pt` / `--no-save_pt` controls whether the sampled structures are dumped per grid cell (saved by default)
+- outputs a CSV plus a sibling JSON summary; `--overwrite` replaces existing files
+
+> Note: checkpoints may store `aa_rho_lattice=0`. To reproduce a reported number that used lattice anti-annealing, pass the intended value explicitly (e.g. `--aa_rho_lattice_values 4`) rather than relying on the stored default.
+
+## Thermo Backends
+
+Thermo stability is optional in both train-time sampling eval and DNG checkpoint eval.
+
+- CHGNet is the default backend.
+- NequIP is optional and requires `--thermo_mlip nequip` plus a valid `--nequip_compile_path`.
+- In training, thermo metrics are enabled with `--thermo_stability_check`.
+- In checkpoint eval, thermo metrics are enabled with `--thermo_count > 0`.
+
+### Phase diagram (hull)
+
+Both backends use a Materials Project phase diagram pickle for e-above-hull computation. Download `2023-02-07-ppd-mp.pkl` from Matbench Discovery v1.0.0 on Figshare:
+
+> https://figshare.com/articles/dataset/Matbench_Discovery_v1_0_0/22715158?file=40344436
+
+Place the file in `mp_02072023/`:
+
+```
+mp_02072023/
+└── 2023-02-07-ppd-mp.pkl
+```
+
+Pass the path with `--ppd_path mp_02072023/2023-02-07-ppd-mp.pkl`, or set `thermo_cfg.ppd_path` when constructing `StabilityLogger` programmatically.
+
+### NequIP OAM-L setup
+
+The recommended NequIP model is [NequIP-OAM-L v0.1](https://www.nequip.net/models/mir-group/NequIP-OAM-L:0.1). It must be compiled to a `.nequip.pt2` file before use.
+
+Compile runtime targets for GPU depending on whether you will do sequential or batch relaxation:
+
+```bash
+nequip-compile \
+  mir-group/NequIP-OAM-L:0.1 \
+  data/mlip/nequip/NequIP-OAM-L-ase.nequip.pt2 \
+  --mode aotinductor \
+  --device cuda \
+  --target ase
+
+nequip-compile \
+  mir-group/NequIP-OAM-L:0.1 \
+  data/mlip/nequip/NequIP-OAM-L-batch.nequip.pt2 \
+  --mode aotinductor \
+  --device cuda \
+  --target batch
+```
+
+For CPU inference, replace `--device cuda` with `--device cpu`.
+
+Point `--nequip_compile_path` at either a single `.nequip.pt2` file, a directory, or a glob. When multiple AOT artifacts are available, the runtime will resolve the correct one from `--nequip_relax_mode`:
+
+- `sequential` -> picks the `--target ase` artifact
+- `batch` -> picks the `--target batch` artifact
+
+The default shared glob is `data/mlip/nequip/*.nequip.pt2`.
+
+Optional NequIP-based DNG checkpoint eval:
+
+```bash
+python src/eval_crystalite_ckpt.py \
+  --train_output_dir outputs/dng_mp20 \
+  --checkpoint_preference best \
+  --num_samples 2048 \
+  --thermo_count 256 \
+  --thermo_mlip nequip \
+  --nequip_relax_mode batch \
+  --nequip_compile_path "data/mlip/nequip/*.nequip.pt2"
+```
+
+If you want batched NequIP relaxation during train-time thermo eval or checkpoint eval, use `--thermo_mlip nequip --nequip_relax_mode batch`. That path is only valid for NequIP.
+
+## Outputs and Artifacts
+
+Training writes to `--output_dir` and creates:
+
+- `checkpoints/`
+- `samples/`
+
+Common checkpoint artifacts include:
+
+- `checkpoints/best.pt` when `--best_ckpt` is enabled
+- `checkpoints/final.pt`
+- `checkpoints/step_latest.pt` or step snapshots, depending on `--ckpt_every` and `--ckpt_latest_only`
+- `checkpoints/epoch_latest.pt`
+
+Sample artifacts are written under:
+
+- `output_dir/samples/<tag>_step_<step>/...`
+
+where `<tag>` is the sampling run tag such as `sample`, `sample_ema`, `precise`, or `precise_ema` and, in CSP mode, may include the split label.
+
+DNG checkpoint eval writes reports under:
+
+- `train_output_dir/eval_reports/<run_name>/metrics.json`
+
+Optional checkpoint-eval artifacts include:
+
+- `samples.pt` when `--save_samples_pt` is enabled
+- `sun_samples/` and a manifest when `--save_sun_samples` is enabled
+
+If W&B logging is enabled during training, metrics and rendered sample images are also logged there.
+
+## Citation
+```
+@misc{veljković2026crystalitelightweighttransformerefficient,
+      title={Crystalite: A Lightweight Transformer for Efficient Crystal Modeling}, 
+      author={Tin Hadži Veljković and Joshua Rosenthal and Ivor Lončarić and Jan-Willem van de Meent},
+      year={2026},
+      eprint={2604.02270},
+      archivePrefix={arXiv},
+      primaryClass={cs.LG},
+      url={https://arxiv.org/abs/2604.02270}, 
+}
+```
+
+Logo design by [Dee Vasilevskaia](https://deevasilevskaia.com/).

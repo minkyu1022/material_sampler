@@ -1,0 +1,2 @@
+_target_: src.energies.dist_utils.Delta
+dim: ${dim}

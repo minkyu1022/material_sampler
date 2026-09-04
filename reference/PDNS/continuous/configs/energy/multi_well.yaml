@@ -1,0 +1,7 @@
+_target_: src.energies.dist_energy.DistEnergy
+
+dist:
+  _target_: src.energies.dist_utils.MultiWell
+  separation: 2.0
+  dim: ${dim}
+  shift: 1.5

@@ -1,0 +1,18 @@
+{
+  "parent": "configs/cuni/reproduced_best.json",
+  "overrides": {
+    "phase": "bcc",
+    "potential": "potentials/ni_co_cr/Ni-Co-Cr_v1.eam.fs",
+    "prior": "outputs/nicr_calibration/bcc_prior.json",
+    "output": "outputs/nicr_janus_bcc_best_u025_v10_seed2",
+    "fresh_per_round": 500,
+    "composition_rungs": [],
+    "temperature_values": [],
+    "temperature_min": 600.0,
+    "temperature_max": 1500.0,
+    "diffusion_scale": 1.0,
+    "diffusion_scale_u": 0.25,
+    "diffusion_scale_v": 1.0,
+    "seed": 5026
+  }
+}

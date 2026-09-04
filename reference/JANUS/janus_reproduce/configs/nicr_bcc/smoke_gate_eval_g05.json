@@ -1,0 +1,30 @@
+{
+  "parent": "configs/cuni/reproduced_best.json",
+  "overrides": {
+    "phase": "bcc",
+    "potential": "potentials/ni_co_cr/Ni-Co-Cr_v1.eam.fs",
+    "prior": "outputs/nicr_calibration/bcc_prior.json",
+    "output": "outputs/nicr_janus_bcc_smoke_gate",
+    "initial_buffer": 500,
+    "rounds": 1,
+    "fresh_per_round": 100,
+    "replay_size": 600,
+    "updates_per_round": 100,
+    "batch_size": 96,
+    "rollout_batch": 4,
+    "temperature_values": [
+      600.0,
+      1200.0
+    ],
+    "composition_rungs": [
+      0,
+      32,
+      64,
+      96,
+      128
+    ],
+    "wandb_project": null,
+    "resume": false,
+    "diffusion_scale": 0.5
+  }
+}

@@ -1,0 +1,8 @@
+\section{Benchmark Evaluation}
+\label{sec:benchmarks}
+
+Inspired by the CSP blind tests~\citep{hunnisett2024seventhranking,hunnisett2024seventhgeneration}, we evaluate models along two complementary axes: structure generation and structure ranking. Structure generation (\Cref{sec:structure-generation}) measures unranked coverage at a fixed candidate budget, testing whether a generator can recover the experimental structure. Structure ranking (\Cref{sec:structure-ranking}) measures whether generated candidates remain useful after downstream relaxation and ranking, by evaluating how highly the experimental form is ranked. Unlike the CSP blind-test ranking track, which fixes the candidate pool and varies the ranking method, we fix the downstream evaluator and vary the generator, thereby measuring end-to-end generator--evaluator compatibility.
+
+\input{sections/benchmarks/setup.tex}
+\input{sections/benchmarks/structure_generation.tex}
+\input{sections/benchmarks/structure_ranking.tex}

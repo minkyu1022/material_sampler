@@ -1,0 +1,29 @@
+{
+  "audited_epoch": 1788480240,
+  "sample_count": 256,
+  "cell_matrix_change_frobenius_A": {
+    "min": 0.0005873752801673135,
+    "median": 0.07045485846775607,
+    "max": 0.18953011303258657,
+    "nonzero_count": 256
+  },
+  "offdiagonal_cell_change_frobenius_A": {
+    "min": 2.8880184490940897e-05,
+    "median": 0.00012541073513911016,
+    "max": 0.0003779981941365331,
+    "nonzero_count": 256
+  },
+  "atomic_cartesian_rms_change_A": {
+    "min": 0.12317229671293413,
+    "median": 0.14170096662520484,
+    "max": 0.16964499871642078,
+    "nonzero_count": 256
+  },
+  "atomic_minimum_image_fractional_rms_change": {
+    "min": 0.01149713453491154,
+    "median": 0.013018479364634426,
+    "max": 0.014450417658814598,
+    "nonzero_count": 256
+  },
+  "passed": true
+}

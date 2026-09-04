@@ -1,0 +1,6 @@
+_target_: src.energies.dist_energy.DistEnergy
+
+dist:
+  _target_: src.energies.dist_utils.Funnel
+  dim: 10
+  n_reference_samples: 1000000

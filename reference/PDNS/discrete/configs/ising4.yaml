@@ -1,0 +1,83 @@
+# configs for learning 4x4 Ising model
+# All batch and buffer sizes are *per device* in DDP mode
+
+# hyperparams for the target distribution
+dist: ising
+tokens: 2
+L: 4
+D: ${eval:"${L}**2"}
+beta: 0.6 # high: 0.28, critical: 0.4407, low: 0.6 
+J: 1
+h: 0
+
+# hyperparams for the model & ema
+model:
+  name: ropevit
+  hidden_size: 32
+  n_blocks: 2
+  n_heads: 4
+  length: ${D}
+  dtype: bfloat16
+ema:
+  decay: 0.9999 # 0 means no moving average
+
+##### hyperparams for training
+ckpt_path: null
+# absolute path of the .pth file if restart from a checkpoint
+
+batch_size: 256
+wdce_num_replicates: 16
+wdce_loss_formulation: m # 'lambda' or 'm'
+wdce_antithetic: true
+wdce_imp_samp_buffer: false
+# if true, first sample from the buffer according to the weights and treat them as uniform samples when computing loss
+sample_buffer_every: 1
+buffer_size: 256
+pdns_adaptive: false
+pdns_loss_version: v1 # 'v1' (recommended) or 'v2'
+save_every_stages: 99999 # a large number means will only save at the end of training
+pdns_on_policy: true
+# if true, use the current EMA model P^\theta to sample from the buffer;
+# otherwise, use the EMA model at the end of the last stage P^{\theta_{k-1}}
+# this is not truely on-policy, but the gap is smaller
+
+## the following are only used in non-adaptive PDNS trainer
+pdns_coeffs: [0.2, 0.3, 0.4, 0.5, 0.5, 0.6, 0.6, 1.0]
+pdns_outer_loops: ${eval:"len(${pdns_coeffs}) if ${pdns_coeffs} is not None else 0"}
+pdns_inner_loops: [500, 500, 500, 200, 200, 200, 200, 200]
+
+## the following are only used in adaptive PDNS trainer
+pdns_ada_kl_threshold: 0.1 # select coeff s.t. ess_train is >= this number
+pdns_ada_term_mu: 0.05 # when mu is <= this number, set coeff = 1 and do refinement
+pdns_ada_refine_stages: 5 # refine for these many stages with coeff = 1
+pdns_ada_refine_inner_loops: 20 # number of inner loops in each refinement stage
+pdns_ada_term_ess: 0.95 # when ess_eval_local is >= this number, move to the next stage
+pdns_ada_max_inner_loops: 500 # max number of inner loops in each stage
+pdns_ada_min_inner_loops: 100 # min number of inner loops in each stage
+pdns_ada_max_outer_loops: 100 # max number of outer loops (stages)
+
+##### hyperparams for optimization
+optimizer:
+  lr: 1e-3
+  weight_decay: 0.00
+  grad_clip: false
+  grad_clip_norm: 1
+  log_grad_norm_every: 20 # if grad_clip is false, log the grad norm every this many steps
+  reset_every: 1 # if > 0, reset the optimizer at the beginning of every this many stages for PDNS training
+
+##### hyperparams for evaluation
+eval_every: 10
+eval_batch_size: 64
+
+##### hyperparams for logging
+logging:
+  displaying: true # if true, print to the console
+  saving: false # if true, save log to the local file
+  debug: false # if true, will use logging.DEBUG level; otherwise, logging.INFO level
+  use_wandb: true # if false, will only log to the local file
+  wandb_api_key: null # if not set, will use the default key in ~/.netrc
+  wandb_entity: your_wandb_entity
+  wandb_project: your_wandb_project
+  root_dir: outputs
+  run_name: ising4
+  dir: ${logging.root_dir}/${logging.run_name}

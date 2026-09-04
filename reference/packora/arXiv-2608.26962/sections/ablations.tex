@@ -1,0 +1,39 @@
+\section{Building the Recipe}
+\label{sec:recipe}
+\label{sec:ablations}
+
+We construct the final \model{} recipe through five controlled studies of the
+design space:
+\begin{itemize}
+    \item \textbf{Architecture:} Which backbone---DiT with pairwise bias,
+    Pairformer, or PairMixer---is most effective? Where should the noisy crystal
+    state enter the network, and do additional single-track or geometry modules
+    help? (\Cref{fig:sp-architecture,fig:architecture-ablation-convergence})
+    
+    \item \textbf{Training:} Which choices of time distribution, augmentation,
+    endpoint objective, loss weighting, auxiliary supervision, and optimizer
+    improve structure generation?
+    (\Cref{fig:training-recipe-summary})
+    
+    \item \textbf{Conditioning:} How should optional inputs be dropped during
+    training so that a single model remains effective across different
+    combinations of stereochemistry, molecular templates, and space-group
+    information? (\Cref{fig:conditioning-sweep})
+    
+    \item \textbf{Inference:} Which sampler and solver settings work best, and
+    does autoguidance provide further gains?
+    (\Cref{fig:inference-sweeps})
+
+    \item \textbf{Scaling:} How does scaling single-track and pair-track widths
+    affect per-sample success and coverage across targets, and which allocation
+    best balances the two?
+    (\Cref{fig:width-scaling-tradeoff};
+    \Cref{tab:width_scaling_ablation})
+\end{itemize}
+
+\input{sections/ablations/setup.tex}
+\input{sections/ablations/model_architecture.tex}
+\input{sections/ablations/training.tex}
+\input{sections/ablations/conditioning.tex}
+\input{sections/ablations/inference.tex}
+\input{sections/ablations/model_scaling.tex}

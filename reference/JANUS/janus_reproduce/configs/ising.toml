@@ -1,0 +1,10 @@
+system = "ising"
+lattice_size = 16
+temperature_min = 1.5
+temperature_max = 3.2
+field_min = 0.0
+field_max = 0.4
+reveal_steps = 128
+reference_chains = 24
+reference_clusters = 3000
+reference_burn_in = 600

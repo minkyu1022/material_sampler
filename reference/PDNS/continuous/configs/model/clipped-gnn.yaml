@@ -1,0 +1,6 @@
+defaults:
+  - base@base_model: egnn
+  - _self_
+
+_target_: src.components.controllers.ClippedCtrl
+clip_norm: false

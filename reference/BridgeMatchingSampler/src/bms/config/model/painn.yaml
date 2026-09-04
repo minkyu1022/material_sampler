@@ -1,0 +1,12 @@
+_target_: bms.model.painn.PaiNN
+num_features: 128
+num_radial_basis: 64
+num_layers: 4
+r_max: 8.0
+r_offset: 0.0
+time_init_mode: node
+conservative: false
+parity_breaking: true
+num_elements: ${num_atoms}
+unique_atom_indices: true
+composition: ${composition}

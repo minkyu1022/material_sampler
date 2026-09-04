@@ -1,0 +1,67 @@
+
+\begin{table}[H]
+\centering
+\caption{\textbf{Tabular results for structure generation benchmark.}
+We report standard $\mathrm{Sol}_C$ and strict $\mathrm{Sol}_C^{15/15}$ at
+30 and 1{,}000 candidates per target. At 30 candidates, CLARI and \model{}
+results are mean $\pm$ standard deviation over 5{,}000 resamples from
+1{,}000-candidate pools; other baselines are reported as provided in \citet{jin2025oxtal}.
+Results at 1{,}000 candidates use the full pool.
+\textbf{Bold} and \underline{underline} denote the best and second-best
+generative results, respectively.}
+\label{tab:benchmark_solc_main}
+\small
+\setlength{\tabcolsep}{3.5pt}
+\begin{tabular}{lcccccc}
+\toprule
+Method & Rigid (50) & Flexible (50) & CSP5 (6) & CSP6 (5) & CSP7 (8) & Teaching (773) \\
+
+\midrule
+\multicolumn{7}{l}{\textbf{\emph{$\mathrm{Sol}_C$ at 30-candidate budget}}} \\
+\addlinespace
+A-Transformer & 0.060 & 0.000 & 0.000 & 0.000 & 0.000 & -- \\
+AssembleFlow & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & -- \\
+OXtal & 0.300 & 0.220 & 0.167 & 0.200 & 0.125 & -- \\
+CLARI-M & $0.692 \pm 0.038$ & $0.283 \pm 0.044$ & $0.410 \pm 0.136$ & $0.286 \pm 0.119$ & $0.154 \pm 0.102$ & $0.506 \pm 0.010$ \\
+CLARI-L & $0.728 \pm 0.039$ & $0.336 \pm 0.043$ & $0.541 \pm 0.160$ & $0.332 \pm 0.138$ & $0.138 \pm 0.105$ & $0.549 \pm 0.010$ \\
+CLARI-H & $0.740 \pm 0.039$ & $0.396 \pm 0.042$ & $0.598 \pm 0.146$ & $0.412 \pm 0.158$ & $0.134 \pm 0.112$ & $0.590 \pm 0.010$ \\
+\rowcolor{mfTealFill}
+\model{}-M & $\mathbf{0.807} \pm 0.031$ & $\underline{0.498} \pm 0.047$ & $\underline{0.732} \pm 0.130$ & $\underline{0.426} \pm 0.154$ & $\underline{0.212} \pm 0.102$ & $\underline{0.637} \pm 0.009$ \\
+\rowcolor{mfTealFill}
+\model{}-L & $\underline{0.795} \pm 0.035$ & $\mathbf{0.530} \pm 0.047$ & $\mathbf{0.793} \pm 0.081$ & $\mathbf{0.433} \pm 0.165$ & $\mathbf{0.238} \pm 0.126$ & $\mathbf{0.663} \pm 0.009$ \\
+\midrule
+\multicolumn{7}{l}{\textbf{\emph{$\mathrm{Sol}_C^{15/15}$ at 30-candidate budget}}} \\
+\addlinespace
+CLARI-M & $0.264 \pm 0.038$ & $0.041 \pm 0.025$ & $0.069 \pm 0.091$ & $0.006 \pm 0.033$ & $0.010 \pm 0.034$ & $0.165 \pm 0.008$ \\
+CLARI-L & $0.351 \pm 0.041$ & $0.107 \pm 0.037$ & $0.131 \pm 0.100$ & $0.063 \pm 0.102$ & $\underline{0.018} \pm 0.043$ & $0.223 \pm 0.009$ \\
+CLARI-H & $0.424 \pm 0.043$ & $0.155 \pm 0.039$ & $0.230 \pm 0.124$ & $0.088 \pm 0.122$ & $0.011 \pm 0.036$ & $0.275 \pm 0.009$ \\
+\rowcolor{mfTealFill}
+\model{}-M & $\mathbf{0.508} \pm 0.039$ & $\underline{0.262} \pm 0.043$ & $\underline{0.374} \pm 0.149$ & $\underline{0.108} \pm 0.127$ & $0.011 \pm 0.036$ & $\underline{0.367} \pm 0.009$ \\
+\rowcolor{mfTealFill}
+\model{}-L & $\underline{0.476} \pm 0.045$ & $\mathbf{0.296} \pm 0.043$ & $\mathbf{0.489} \pm 0.172$ & $\mathbf{0.254} \pm 0.128$ & $\mathbf{0.025} \pm 0.053$ & $\mathbf{0.394} \pm 0.009$ \\
+\midrule
+\multicolumn{7}{l}{\textbf{\emph{$\mathrm{Sol}_C$ at 1{,}000-candidate budget}}} \\
+\addlinespace
+CLARI-M & \underline{0.960} & 0.740 & \underline{0.833} & \underline{0.800} & 0.625 & 0.811 \\
+CLARI-L & \underline{0.960} & 0.760 & \textbf{1.000} & \underline{0.800} & \underline{0.875} & 0.841 \\
+CLARI-H & 0.940 & 0.800 & \textbf{1.000} & \underline{0.800} & \underline{0.875} & 0.869 \\
+\rowcolor{mfTealFill}
+\model{}-M & \underline{0.960} & \textbf{0.920} & \textbf{1.000} & \textbf{1.000} & \textbf{1.000} & \underline{0.895} \\
+\rowcolor{mfTealFill}
+\model{}-L & \textbf{0.980} & \underline{0.880} & \textbf{1.000} & \textbf{1.000} & \textbf{1.000} & \textbf{0.900} \\
+\midrule
+\multicolumn{7}{l}{\textbf{\emph{$\mathrm{Sol}_C^{15/15}$ at 1{,}000-candidate budget}}} \\
+\addlinespace
+CLARI-M & 0.680 & 0.380 & 0.333 & 0.200 & 0.125 & 0.453 \\
+CLARI-L & 0.780 & 0.540 & 0.500 & \underline{0.800} & 0.125 & 0.563 \\
+CLARI-H & \underline{0.800} & 0.640 & \underline{0.667} & \underline{0.800} & \underline{0.250} & 0.618 \\
+\rowcolor{mfTealFill}
+\model{}-M & \underline{0.800} & \textbf{0.740} & \textbf{0.833} & \underline{0.800} & \underline{0.250} & \underline{0.683} \\
+\rowcolor{mfTealFill}
+\model{}-L & \textbf{0.900} & \underline{0.700} & \textbf{0.833} & \textbf{1.000} & \textbf{0.500} & \textbf{0.722} \\
+\bottomrule
+\end{tabular}
+\vspace{1mm}
+\begin{minipage}{0.98\textwidth}
+\end{minipage}
+\end{table}

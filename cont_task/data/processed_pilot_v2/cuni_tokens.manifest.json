@@ -1,0 +1,25 @@
+{
+  "schema": "crystalite-mp20-token-compatible-v1",
+  "items": 32,
+  "failures": 0,
+  "species_sorted": false,
+  "species_coordinate_order_preserved": true,
+  "niggli_reduced": true,
+  "primitive_reduced": false,
+  "composition_counts": {
+    "0": 32
+  },
+  "diversity_by_n_cu": {
+    "0": {
+      "count": 32,
+      "unique_fingerprints": 32,
+      "approx_duplicate_count": 0,
+      "final_energy_eV_mean": -480.5998490354574,
+      "final_energy_eV_std": 3.0484418615903184e-05,
+      "final_volume_A3_mean": 1177.643937744708,
+      "final_volume_A3_std": 0.047913124116293754
+    }
+  },
+  "duplicate_definition": "SHA256(species order, first-site-centered fractional coordinates rounded 1e-5, Niggli lattice rounded 1e-5)",
+  "output": "/home/spml_minkyu_kim/joint_sampler/cont_task/data/processed_pilot_v2/cuni_tokens.pt"
+}

@@ -1,0 +1,18 @@
+\subsection{Architecture: A Cacheable Pairmixer Design}
+\label{sec:recipe-architecture}
+
+\textbf{Explored designs.} We compare three backbones: (1)~DiT with pair-bias attention, as used by CLARI~\citep{lo2026clari}; (2)~Pairformer, as used by AlphaFold3 and OXtal~\citep{Abramson2024,jin2025oxtal}; and (3)~Pairmixer, a lighter Pairformer variant without triangle attention~\citep{ouyangzhang2025triangle}. We also test a single-track update and the geometric enhancement module (GEM)~\citep{veljkovic2026crystalite}, which injects periodic minimum-image pair geometry from the noisy structure. Finally, we compare a pre-entry design, inspired by Proteina~\citep{geffner2025proteina}, where noisy coordinate and lattice features enter before pair refinement, with a post-entry design, following AlphaFold3~\citep{Abramson2024}, where they enter afterward so that the pair representation can be cached.
+
+\input{figures/sp_architecture_tikz.tex}
+
+\textbf{Results and selection.}
+Pairmixer outperforms Pairformer and DiT with pair-bias attention
+($0.479$ vs.\ $0.462$ vs.\ $0.421$; \Cref{fig:architecture-ablation-convergence}a--b).
+Pairformer performs better early in training but later degrades and is
+substantially more expensive than Pairmixer. GEM improves DiT with pair-bias
+attention, whereas neither GEM nor the single-track update improves Pairmixer
+(\Cref{fig:architecture-ablation-convergence}c--d). Pre-entry Pairmixer slightly
+outperforms post-entry Pairmixer ($0.479$ vs.\ $0.474$), but caching the post-entry design yields a $20.1\times$ reduction in 200-step sampling time in a synthetic $[64,300]$ benchmark, with peak memory increasing slightly from $21.3$ to $28.0$ GiB (\Cref{fig:architecture-ablation-convergence}e--f). We therefore
+select post-entry Pairmixer without additional modules. We report parameter count and GFLOPs of each architecture variant in \Cref{app:detailed-ablation-tables}.
+
+\input{figures/fig_architecture_ablation_convergence.tex}

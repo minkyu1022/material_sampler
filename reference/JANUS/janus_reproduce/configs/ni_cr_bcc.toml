@@ -1,0 +1,13 @@
+system = "ni_cr"
+lattice = "bcc"
+n_atoms = 128
+temperature_min = 600.0
+temperature_max = 1500.0
+delta_mu_a0_ev = -1.086
+delta_mu_a1_ev_per_k = 9.0e-6
+delta_mu_wide_ev = 0.30
+delta_mu_narrow_ev = 0.06
+cutoff_angstrom = 5.3
+steps = 100
+fresh_terminals_per_round = 500
+

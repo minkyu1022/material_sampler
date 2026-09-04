@@ -1,0 +1,2 @@
+INVALID PRE-PRODUCTION ARTIFACT
+Generated before correcting the reference-MC species encoding. The source format is 1=Cu, 0=Ni, but this artifact used the inverse mapping. Do not use for training, validation, or scientific claims.

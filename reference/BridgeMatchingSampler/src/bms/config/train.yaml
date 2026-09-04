@@ -1,0 +1,37 @@
+defaults:
+  - _self_
+  - experiment: ala2
+
+# Output directory for checkpoints, samples, and logs.
+root: outputs
+seed: 42
+
+tag: bms
+
+hydra:
+  run:
+    dir: ${root}/${name}
+
+# Logging / checkpointing intervals.
+log_loss_interval_step: 10
+checkpoint_directory: ${hydra:run.dir}/checkpoints
+save_checkpoint_interval_epoch: 50
+save_vis_interval_epoch: 50
+sample_directory: ${hydra:run.dir}/samples
+save_sample_interval_epoch: 20
+progress_bar: true
+num_workers: 0
+compile: true
+
+# Number of samples to generate in bms.experiment.sample.
+num_samples: 100000
+
+# Resume training from a pretrained controller checkpoint (optional).
+pretrained_controller_checkpoint: null
+
+fabric:
+  _target_: lightning.fabric.Fabric
+  accelerator: gpu
+  strategy: ddp
+  devices: 1
+  num_nodes: 1

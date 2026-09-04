@@ -1,0 +1,9 @@
+defaults:
+  - base@base_model: egnn
+  - _self_
+
+_target_: src.components.controllers.LerpTargetCtrl
+detach_score: False
+clip_score: 20
+clip_norm: 20
+scale_score: 1.

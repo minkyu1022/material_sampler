@@ -1,0 +1,13 @@
+{
+  "schema": "crystalite-mp20-token-compatible-v1",
+  "items": 16,
+  "failures": 0,
+  "species_sorted": false,
+  "species_coordinate_order_preserved": true,
+  "niggli_reduced": true,
+  "primitive_reduced": false,
+  "composition_counts": {
+    "0": 16
+  },
+  "output": "/home/spml_minkyu_kim/joint_sampler/cont_task/data/processed_pilot/cuni_tokens.pt"
+}

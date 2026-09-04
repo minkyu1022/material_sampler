@@ -1,0 +1,43 @@
+\section{Related Work}
+
+\textbf{Search-based molecular CSP.}
+Search-based molecular CSP typically involves exploring molecular conformations and crystal packings, followed by geometry relaxation and energy ranking. Structure generation and ranking have long been central components of molecular CSP, with the seventh CCDC blind test explicitly evaluating them in separate phases~\citep{reilly2016sixth,hunnisett2024seventhranking,hunnisett2024seventhgeneration}. Candidate structures are commonly generated across selected space groups by sampling unit-cell parameters and molecular positions and orientations, with flexible molecules requiring additional sampling of intramolecular degrees of freedom~\citep{day2009significant,reilly2016sixth}. Generated structures are then deduplicated or clustered and evaluated hierarchically, often using force fields for initial relaxation and screening followed by dispersion-corrected density functional theory for refinement and ranking~\citep{beran2023frontiers,hunnisett2024seventhranking}. Genarris uses constrained random generation followed by diversity-based down-selection~\citep{li2018genarris}, whereas GAtor uses a first-principles genetic algorithm with molecular-crystal breeding operators and structural niching~\citep{curtis2018gator}. FastCSP accelerates relaxation and ranking stage using a machine-learning interatomic potential, while retaining random structure generation for initial candidates~\citep{gharakhanyan2025fastcsp}.
+
+\textbf{Generative molecular CSP.}
+Generative molecular CSP instead learns a distribution over experimental crystal
+structures. OXtal is an all-atom diffusion model trained on lattice-free molecular
+crops and adapts the AlphaFold3 Pairformer trunk~\citep{Abramson2024} to atom-level
+representations~\citep{jin2025oxtal}. MolCrystalFlow represents each molecule as a
+rigid body and learns geodesic flows over molecular centroids, orientations, and
+lattice parameters~\citep{zeng2026molcrystalflow}. PackFlow applies
+reinforcement-learning post-training guided by MLIP energies and forces, improving
+physical validity and concentrating proposals in low-energy
+basins~\citep{subramanian2026packflow}. CLARI generates explicit unit cells and
+replaces triangle layers with pair-bias attention, yielding a reported
+15--30$\times$ speedup over OXtal~\citep{lo2026clari}. However, none of these
+methods provides a single model in which molecular conformers, stereochemical
+labels, and space-group information can each be supplied or omitted at inference
+time~\citep{jin2025oxtal,lo2026clari,subramanian2026packflow,
+zeng2026molcrystalflow}. The capabilities of our model and prior approaches are
+summarized in \Cref{tab:model-capability-comparison}.
+
+\input{tables/model_capability_comparison.tex}
+
+\textbf{Generative CSP.}
+A related line of work studies crystal generation and structure prediction for
+inorganic materials. CDVAE combines a variational autoencoder with diffusion-based
+coordinate generation, whereas DiffCSP jointly diffuses fractional coordinates and
+lattice conditioned on a given
+composition~\citep{xie2022crystal,jiao2024crystal}. Subsequent approaches formulate
+periodic crystal generation using flow matching, as in FlowMM and
+CrystalFlow~\citep{millerflowmm,luo2025crystalflow}; stochastic interpolants, as in
+OMatG~\citep{hollmeropen}; or Bayesian flows over periodic
+variables~\citep{wu2025periodic}.
+
+Generative CSP has also been extended to metal-organic frameworks (MOFs), 
+where metal nodes and organic linkers can be treated as modular building blocks. 
+MOFFlow~\citep{kim2025mofflow} and MOF-BFN~\citep{jiao2025mof} generate lattices 
+and rigid-body poses of known building blocks using Riemannian and Bayesian flows, 
+respectively, while MOFFlow-2~\citep{kim2025flexible} additionally generates building
+blocks and models linker torsions. AtomMOF~\citep{kim2026atommof} removes the rigid-body
+assumption by directly generating MOF and MOF--adsorbate structures at all-atom resolution.

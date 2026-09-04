@@ -1,0 +1,16 @@
+{
+  "created_utc": "2026-09-03T16:26:19.572973+00:00",
+  "input_dir": "/home/spml_minkyu_kim/joint_sampler/reference/JANUS/janus_reproduce/outputs/cuni_reference_n108_full",
+  "potential": "/home/spml_minkyu_kim/joint_sampler/reference/JANUS/janus_reproduce/potentials/cu_ni/Cu_Ni_Fischer_2018.eam.alloy",
+  "potential_sha256": "ee585bf9884a4ac2548abb395e81a12a941505983aaa058ef546929df74cf240",
+  "optimizer": "ase.optimize.BFGS",
+  "cell_filter": "ase.filters.FrechetCellFilter",
+  "full_cell_dof": true,
+  "scalar_pressure_eV_A3": 0.0,
+  "workers": 64,
+  "chains": 990,
+  "frame_limit": 0,
+  "fmax_eV_A": 0.01,
+  "max_steps": 500,
+  "maxstep": 0.1
+}

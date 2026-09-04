@@ -1,0 +1,4 @@
+_target_: src.energies.fairchem_energy.FairChemEnergy
+model_ckpt: ${shared_dir}/ghliu/eSEN/checkpoint_900k.pt
+tau: ${tau}
+alpha: ${alpha}

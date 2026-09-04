@@ -1,0 +1,70 @@
+# Secrets
+.env
+.env.*
+*.pem
+*.key
+.agent-tools/discord/profile.env
+**/secrets/**
+
+# Python/runtime
+**/.venv/**
+**/__pycache__/**
+**/.pytest_cache/**
+**/.mypy_cache/**
+**/.ruff_cache/**
+*.py[cod]
+
+# Nested VCS and agent state
+**/.git/**
+.omx/**
+
+# Experiment tracking and logs
+**/wandb/**
+*.log
+*.pid
+
+# Heavy scientific artifacts: stored via external data manifest
+*.pt
+*.pth
+*.ckpt
+*.npz
+*.npy
+*.extxyz
+*.traj
+*.cif
+*.h5
+*.hdf5
+*.lmdb
+*.tar
+*.tar.gz
+*.tgz
+*.tar.zst
+*.zip
+
+# Generated run/output trees
+**/outputs/**
+**/output/**
+**/checkpoints/**
+cont_task/data/cuni_reference_relaxed_full_v2/N*/
+cont_task/data/processed/**
+cont_task/data/crystalite_cuni/**
+cont_task/data/cuni_overfit_10k/**
+cont_task/data/cuni_overfit_snapshot/**
+cont_task/data/cuni_postprocess_preview_1000/**
+cont_task/data/benchmark_*/**
+cont_task/data/phase1_validation_pilot_*/**
+cont_task/pre_train/architecture_capacity/**
+cont_task/pre_train/smoke_*/**
+
+# Local scratch/editor
+.DS_Store
+*.swp
+*.tmp
+**/.venv*/**
+**/.omx/**
+**/pid
+**/runtime_pid
+**/status.json
+**/progress.jsonl
+**/started_at.txt
+cont_task/data/cuni_reference_relaxed_full/**

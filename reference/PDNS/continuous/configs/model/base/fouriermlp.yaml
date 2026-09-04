@@ -1,0 +1,12 @@
+_target_: src.model.networks.FourierMLP
+dim: ${dim}
+num_layers: ${num_layers}
+channels: ${channels}
+activation:
+  _target_: torch.nn.GELU
+last_bias_init:
+  _target_: torch.nn.init.zeros_
+  _partial_: True
+last_weight_init:
+  _target_: torch.nn.init.zeros_
+  _partial_: True

@@ -1,0 +1,75 @@
+# @package _global_
+
+# to execute this experiment run:
+# python train.py experiment=example
+
+# all parameters below will be merged with parameters from default configurations set above
+# this allows you to overwrite only specified parameters
+
+defaults:
+  - /source: gauss # meanfree, delta, harmonic
+  - /energy: alanine_dipeptide_ic
+  - /sde@ref_sde: vp
+  - /model@controller: clipped
+  - /scheduler@gamma_scheduler: adaptive
+  - /sde@annealed_sde: annealing_sde
+
+# === problem ===
+dim: 60 # 22x3
+plot_lim: false
+
+# === sde ===
+nfe: 1000
+rescale_t: null # quad, cosine
+zero_last_step_noise: true
+sigma: 1.0
+sigma_max: 1.0
+sigma_min: 0.001 ## Use smaller sigma_max
+beta0: 10.0
+beta1: 0.01
+
+# === annealed sde ===
+annealing_beta0: 10.0
+annealing_beta1: 0.01
+annealing_type: 'annealed'
+max_grad_E_norm: 10.0
+
+# === step parameters (IMPORTANT!!) ===
+gamma: 1.0
+epsilon: 0.01
+alpha: 1.0
+
+# === solver ===
+iws: true
+annealed: true
+cumulate: false
+score_matcher:
+  buffer_size: 50000
+  duplicates: 2
+
+# === network ===
+num_layers: 4
+channels: 2048
+
+# TODO network archi
+controller:
+  base_model:
+    num_layers: ${num_layers}
+    channels: ${channels}
+
+# === training ===
+num_epochs: 100000
+ema_decay: 0.999
+num_epochs_per_stage: 1000
+
+optim:
+  lr: 1e-4
+  weight_decay: 0.0
+  beta1: 0.9
+  beta2: 0.999
+
+
+# === eval & logging ===
+use_wandb: true
+eval_freq: 1000
+# nll_integration_method: dopri5 ## TODO: (jchoi) Make nll evaluation code. (Not necessary for now.)

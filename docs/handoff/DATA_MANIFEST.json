@@ -1,0 +1,11 @@
+{
+  "schema": "material-sampler-data-manifest-v1",
+  "generated_at": "2026-09-04",
+  "dropbox_status": "pending_authentication",
+  "archives": [],
+  "notes": [
+    "Dropbox is not configured on the source server yet.",
+    "Every archive entry must contain relative paths, size, SHA256, and direct download URL after upload.",
+    "Credentials are never stored in this file."
+  ]
+}

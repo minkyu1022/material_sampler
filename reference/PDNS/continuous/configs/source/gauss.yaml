@@ -1,0 +1,3 @@
+_target_: src.energies.dist_utils.IsotropicGauss
+dim: ${dim}
+scale: ${sigma}

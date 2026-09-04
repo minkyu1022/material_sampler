@@ -1,0 +1,109 @@
+\documentclass{spml_template}
+
+\usepackage[T1]{fontenc}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{amssymb}
+\usepackage{array}
+\usepackage{booktabs}
+\usepackage{colortbl}
+\usepackage{longtable}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{placeins}
+\usepackage{pifont}
+\usepackage{algpseudocode}
+\floatstyle{ruled}
+\newfloat{algorithm}{tbp}{loa}
+\floatname{algorithm}{Algorithm}
+\usepackage{microtype}
+\usepackage{xcolor}
+\usepackage{url}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,backgrounds,fit,calc,shapes.geometric}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18}
+
+\input{math_commands.tex}
+
+\title{\model{}: Systematic Design for Generative Molecular Crystal Structure Prediction}
+
+\author[1]{Nayoung Kim}
+\author[1]{Kiyoung Seong}
+\author[1]{Sungsoo Ahn}
+
+\affiliation[1]{Korea Advanced Institute of Science and Technology (KAIST)}
+
+\metadata[Project Page]{\href{https://nayoung10.github.io/packora/}{\texttt{https://nayoung10.github.io/packora/}}}
+\correspondence{\email{nayoungkim@kaist.ac.kr}, \email{sungsoo.ahn@kaist.ac.kr}}
+
+\abstract{
+\input{sections/abstract.tex}
+}
+
+\begin{document}
+
+\maketitle
+
+\input{figures/fig_benchmark_teaser.tex}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\input{sections/intro.tex}
+\input{sections/related_work.tex}
+\input{sections/method.tex}
+\input{sections/benchmarks.tex}
+\input{sections/ablations.tex}
+\input{sections/conclusion.tex}
+
+\section*{Acknowledgements}
+This research was supported by the NVIDIA Academic Grant Program and by the
+Advanced GPU Utilization Support Program, funded by the Government of the
+Republic of Korea through the Ministry of Science and ICT. This work was also
+supported by the Basic Science Research Program through the National Research
+Foundation of Korea (NRF), funded by the Ministry of Education
+(RS-2025-25435147); grants from the Institute for Information \& Communications
+Technology Planning \& Evaluation (IITP), funded by the Korean government
+(MSIT), including the Artificial Intelligence Graduate School Program (KAIST;
+RS-2019-II190075) and the AI Star Fellowship (KAIST; RS-2025-02304967); a grant
+from the Korea Health Industry Development Institute (KHIDI), funded by the
+Ministry of Health \& Welfare (MOHW), for Developing a Highly Multimodal (Drug,
+Protein, Gene, Cell Imaging, Literature) Foundation Model for ADMET Property
+Prediction (No. N0425208); and an NRF grant funded by MSIT
+(No. RS-2022-NR072184). We also acknowledge the use of OpenAI's ChatGPT and Codex~\citep{openai_chatgpt,openai_codex} for assistance with research code development, figure preparation, and manuscript revision.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\clearpage
+\bibliographystyle{abbrvnat}
+\bibliography{ref}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+\appendix
+\clearpage
+\input{appendix/model_architecture}
+\clearpage
+\input{appendix/dataset_statistics}
+\clearpage
+\input{appendix/training_sampling_hyperparameters}
+\clearpage
+\input{appendix/structure_generation_evaluation}
+\clearpage
+\input{appendix/structure_generation_results}
+\clearpage
+\input{appendix/empirical_unit_cell_z}
+\clearpage
+\input{appendix/strict_structure_alignment_overlays}
+\clearpage
+\input{appendix/structure_ranking_results}
+\clearpage
+\input{appendix/dataset_preprocessing}
+\clearpage
+\input{appendix/detailed_ablation_tables}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+\end{document}

@@ -1,0 +1,29 @@
+
+\begin{table}[!t]
+\centering
+\caption{\textbf{Width-scaling ablation.}
+All rows keep depth, Pairmixer placement, conditioning, validation split, and
+sampler fixed while varying the single width $d_s$ and pair width $d_p$.
+$\mathrm{Sol}_S$ and $\mathrm{Sol}_C$ are evaluated at epoch 300 with 30
+candidates per target and 200-step EDM--Heun sampling (400 NFE). GFLOPs denote
+analytical denoiser-forward costs at $N{=}300$. Teal rows mark the selected width
+configurations: W0 defines \model{}-M, while W4 defines the width of \model{}-L
+before applying weight decay as selected in \Cref{fig:width-scaling-tradeoff}.}
+\label{tab:width_scaling_ablation}
+\small
+\begin{tabular}{@{}lccccccc@{}}
+\toprule
+ID & $d_s$ & $d_p$ & Heads & Params (M) & GFLOPs &
+$\mathrm{Sol}_S \uparrow$ & $\mathrm{Sol}_C \uparrow$ \\
+\midrule
+\rowcolor{mfTealFill}
+W0 & 512 & 128 & 8 & 87.56 & 379.6 & 0.088 & 0.486 \\
+W1 & 512 & 192 & 8 & 89.65 & 762.6 & 0.084 & 0.490 \\
+W2 & 512 & 256 & 8 & 92.54 & 1287.2 & 0.087 & 0.480 \\
+W3 & 768 & 128 & 12 & 184.79 & 421.0 & 0.100 & 0.462 \\
+\rowcolor{mfTealFill}
+W4 & 768 & 192 & 12 & 186.91 & 804.7 & 0.100 & 0.487 \\
+W5 & 1024 & 128 & 16 & 330.79 & 483.8 & 0.111 & 0.454 \\
+\bottomrule
+\end{tabular}
+\end{table}

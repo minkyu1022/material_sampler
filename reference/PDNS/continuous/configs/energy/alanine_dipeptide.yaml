@@ -1,0 +1,7 @@
+_target_: src.energies.alanine_dipeptide_energy.AlanineDipeptideEnergy
+name: ad
+dim: ${dim}
+n_particles: 22
+data_path_val: data/val_split_AD.h5
+data_path_test: data/test_split_AD.h5
+is_molecule: True

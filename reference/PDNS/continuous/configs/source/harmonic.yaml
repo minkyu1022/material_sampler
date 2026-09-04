@@ -1,0 +1,4 @@
+_target_: src.energies.dist_utils.HarmonicCenteredGauss
+n_particles: ${n_particles}
+spatial_dim: ${spatial_dim}
+scale: ${meanfree_source_scale}

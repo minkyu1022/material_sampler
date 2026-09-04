@@ -1,0 +1,4 @@
+_target_: src.energies.mace_energy.MaceEnergy
+tau: ${tau}
+alpha: ${alpha}
+default_regularize: ${default_regularize}

@@ -1,0 +1,6 @@
+_target_: src.components.sdes.GraphVPSDE
+n_particles: ${n_particles}
+spatial_dim: ${spatial_dim}
+beta0: ${beta0}
+beta1: ${beta1}
+sigma: ${sigma}

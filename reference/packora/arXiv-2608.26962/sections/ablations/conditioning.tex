@@ -1,0 +1,21 @@
+\subsection{Conditioning: Robustness Through Template Dropout}
+\label{sec:recipe-conditioning}
+
+\textbf{Explored designs.}
+Because available conditioning information varies across targets, a single model should handle different subsets of optional inputs. We vary
+the template-coordinate dropout probability
+$p_{\mathrm{tpl}}\in\{0,0.5,1\}$ and evaluate each model under five
+inference-time conditioning settings: none, stereochemistry only, template only,
+stereochemistry plus template, and all three conditions including space group.
+
+\textbf{Results and selection.}
+Moderate template dropout ($p_{\mathrm{tpl}}=0.5$) is the most robust across
+conditioning settings, achieving the highest mean $\mathrm{Sol}_C$ over the five
+settings ($0.487$, compared with $0.483$ and $0.264$ for
+$p_{\mathrm{tpl}}=0$ and $1$, respectively). Notably, exposure to templates
+during training also improves performance when no optional conditioning is
+provided: $p_{\mathrm{tpl}}=0.5$ reaches $0.459$, compared with $0.442$ for a
+model that never observes templates. We therefore select
+$p_{\mathrm{tpl}}=0.5$ (\Cref{fig:conditioning-sweep}).
+
+\input{figures/fig_conditioning_sweep.tex}

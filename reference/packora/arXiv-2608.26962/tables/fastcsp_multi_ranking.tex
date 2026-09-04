@@ -1,0 +1,26 @@
+
+\begin{table}[t]
+\centering
+\caption{\textbf{Experimental-form recovery on FastCSP multiple-polymorph benchmark.}
+We generate 1{,}000 candidates for each of the 29 targets, relax them with
+UMA-S-1.2~\citep{wood2025family}, and rank the relaxed structures by increasing
+energy. Recovered denotes the fraction of targets with an
+experimental-form match at any rank, while Top-$k$ denotes the fraction whose
+best match appears within the top $k$ ranks. Mean rank is computed over recovered
+targets only, with lower values indicating better ranking. \textbf{Bold} marks
+the best result. \model{} achieves both higher recovery across rank cutoffs and
+lower experimental-form ranks.}
+\label{tab:fastcsp-multi-ranking}
+\begin{tabular}{lccccc}
+\toprule
+Method & Recovered $\uparrow$ & Top-1 $\uparrow$ & Top-5 $\uparrow$
+& Top-20 $\uparrow$ & Mean rank $\downarrow$ \\
+\midrule
+CLARI-H & 18/29 & 5/29 & 9/29 & 13/29 & 102.17 \\
+\rowcolor{mfTealFill}
+\model{}-M & 19/29 & \textbf{6/29} & 11/29 & 15/29 & \textbf{47.11} \\
+\rowcolor{mfTealFill}
+\model{}-L & \textbf{21/29} & 5/29 & \textbf{13/29} & \textbf{17/29} & 54.62 \\
+\bottomrule
+\end{tabular}
+\end{table}

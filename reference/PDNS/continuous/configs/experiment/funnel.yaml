@@ -1,0 +1,59 @@
+# @package _global_
+
+# to execute this experiment run:
+# python train.py experiment=example
+
+# all parameters below will be merged with parameters from default configurations set above
+# this allows you to overwrite only specified parameters
+
+defaults:
+  - /source: delta # meanfree, delta
+  - /energy: funnel
+  - /sde@ref_sde: brownian_motion
+  - /model@controller: clipped
+  - /scheduler@gamma_scheduler: adaptive
+
+# === problem ===
+dim: 10
+plot_lim: 10
+
+# === sde ===
+nfe: 200
+sigma: 1
+sigma_max: ${sigma}
+sigma_min: 0.1 ## Use smaller sigma_max
+rescale_t: null # quad, cosine
+zero_last_step_noise: false
+
+# === step parameters (IMPORTANT!!) ===
+gamma: 1.0
+epsilon: 0.1
+alpha: 1.0
+
+# === solver ===
+iws: false
+annealed: false
+cumulate: false
+score_matcher:
+  buffer_size: 2000
+  duplicates: 1
+
+# === network ===
+num_layers: 4
+channels: 256
+
+# === training ===
+num_epochs: 100000
+ema_decay: 0
+num_epochs_per_stage: 1000
+
+optim:
+  lr: 1e-3
+  weight_decay: 0.0
+  beta1: 0.0
+  beta2: 0.9
+
+# === eval & logging ===
+use_wandb: true
+eval_freq: 1000
+save_freq: 10000
