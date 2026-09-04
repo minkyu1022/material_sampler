@@ -1,6 +1,14 @@
 # Fractional-coordinate post-training mathematics
 
-## Decision
+## Scope
+
+> **Superseded for the mainline:** the confirmed project target is the base-aware
+> reward tilt documented in `CRYSTALITE_REWARD_TILT_IMPLEMENTATION_AUDIT.md`.
+> Exact wrapped-normal/winding machinery below is retained only for optional
+> exactness checks and future torus-native ablations. It must not replace or block
+> the pretrained Crystallite EDM process used by mainline PCE.
+
+## Original exact-torus decision
 
 The MP20 checkpoint keeps Crystalite's fractional coordinates and six lower-triangular
 cell variables. Fractional coordinates live on the flat unit torus, not on Euclidean
