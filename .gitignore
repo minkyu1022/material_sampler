@@ -68,3 +68,4 @@ cont_task/pre_train/smoke_*/**
 **/progress.jsonl
 **/started_at.txt
 cont_task/data/cuni_reference_relaxed_full/**
+handoff_archives/**

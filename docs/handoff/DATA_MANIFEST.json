@@ -14,7 +14,11 @@
       "contents": [
         "reference/JANUS/janus_reproduce/outputs/cuni_reference_n108_full"
       ],
-      "status": "ready_to_package"
+      "status": "packaged_waiting_for_dropbox",
+      "bytes": 602572800,
+      "sha256": "d1be29dad1c8d9d20e039a1fc68315352c9ebd883ee798a1e2a1efd1566584e2",
+      "local_path": "handoff_archives/cuni_reference_mc.tar",
+      "download_url": null
     },
     {
       "name": "cuni_phase1_relaxed.tar",
