@@ -3,8 +3,11 @@
   "overrides": {
     "phase": "fcc",
     "potential": "potentials/ni_co_cr/Ni-Co-Cr_v1.eam.fs",
-    "prior": "outputs/nicr_calibration/fcc_prior.json",
-    "output": "outputs/nicr_janus_fcc_production_candidate",
+    "prior": "outputs/nicr_calibration_candidate/fcc_prior.json",
+    "output": "outputs/nicr_janus_fcc_candidate_final",
+    "target_cutoff": 5.0,
+    "cutoff_convention": "provisional_abrupt_header",
+    "resume": false,
     "fresh_per_round": 500,
     "composition_rungs": [],
     "temperature_values": [],

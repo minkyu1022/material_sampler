@@ -34,6 +34,8 @@ PROVENANCE = {
     "phase_prior": "PROVISIONAL_RECONSTRUCTION",
 }
 
+DIAGNOSTIC_ROUNDS = frozenset((1, 12, 24, 48, 72, 96, 120))
+
 
 @dataclass(frozen=True)
 class NiCrTrainConfig:
@@ -41,6 +43,8 @@ class NiCrTrainConfig:
     potential: Path
     prior: Path
     output: Path
+    target_cutoff: float
+    cutoff_convention: str = "provisional_abrupt_header"
     parent_config: Path = Path("configs/cuni/reproduced_best.json")
     initial_buffer: int = 5_000
     rounds: int = 120
@@ -134,6 +138,12 @@ class NiCrTrainConfig:
         for key in ("potential", "prior", "output", "parent_config"):
             if key in inherited:
                 inherited[key] = Path(inherited[key])
+        prior_values = json.loads(inherited["prior"].read_text())
+        overrides = payload["overrides"]
+        if "sigma_u_ref" not in overrides and "sigma_u_ref" in prior_values:
+            inherited["sigma_u_ref"] = prior_values["sigma_u_ref"]
+        if "sigma_u_exponent" not in overrides and "sigma_u_exponent" in prior_values:
+            inherited["sigma_u_exponent"] = prior_values["sigma_u_exponent"]
         inherited["parent_config"] = parent_path
         for key in ("temperature_values", "composition_rungs"):
             if key in inherited:
@@ -523,6 +533,13 @@ def _train_updates(
     )
 
 
+def resolved_config(config: NiCrTrainConfig) -> dict:
+    return {
+        key: str(value) if isinstance(value, Path) else value
+        for key, value in asdict(config).items()
+    }
+
+
 def _run_provenance(config: NiCrTrainConfig) -> dict:
     potential_hash = hashlib.sha256(config.potential.read_bytes()).hexdigest()
     try:
@@ -537,13 +554,12 @@ def _run_provenance(config: NiCrTrainConfig) -> dict:
     except (subprocess.CalledProcessError, FileNotFoundError):
         commit, dirty = "UNAVAILABLE_NOT_A_GIT_REPOSITORY", None
     return {
-        "resolved_config": {
-            k: str(v) if isinstance(v, Path) else v for k, v in asdict(config).items()
-        },
+        "resolved_config": resolved_config(config),
         "steps": config.steps,
         "n_atoms": config.spec.n_atoms,
         "graph_cutoff": config.spec.graph_cutoff,
-        "target_cutoff": "native potential cutoff (6.0 A)",
+        "target_cutoff": config.target_cutoff,
+        "cutoff_convention": config.cutoff_convention,
         "potential_sha256": potential_hash,
         "git_commit": commit,
         "dirty_tree": dirty,
@@ -558,14 +574,40 @@ def _run_provenance(config: NiCrTrainConfig) -> dict:
     }
 
 
+def effective_hamiltonian_manifest(config: NiCrTrainConfig) -> dict:
+    if config.target_cutoff != config.spec.graph_cutoff:
+        raise ValueError("target and graph cutoffs must match for the candidate Hamiltonian")
+    if config.cutoff_convention != "provisional_abrupt_header":
+        raise ValueError("unsupported candidate cutoff convention")
+    potential_hash = hashlib.sha256(config.potential.read_bytes()).hexdigest()
+    expected = {
+        "potential_sha256": potential_hash,
+        "target_cutoff": config.target_cutoff,
+        "cutoff_convention": config.cutoff_convention,
+    }
+    prior_values = json.loads(config.prior.read_text())
+    if any(prior_values.get(key) != value for key, value in expected.items()):
+        raise ValueError(f"prior Hamiltonian mismatch: expected {expected}")
+    return {
+        **expected,
+        "graph_cutoff": config.spec.graph_cutoff,
+        "volume_prior_hamiltonian": expected,
+        "displacement_prior_hamiltonian": expected,
+        "replay_hamiltonian": expected,
+        "path_weight_hamiltonian": expected,
+    }
+
+
 def train_nicr(config: NiCrTrainConfig) -> list[dict]:
     if config.phase not in NICR_LATTICES:
         raise ValueError("phase must be fcc or bcc")
+    effective_hamiltonian = effective_hamiltonian_manifest(config)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     torch.manual_seed(config.seed)
     generator = torch.Generator(device=device).manual_seed(config.seed)
     config.output.mkdir(parents=True, exist_ok=True)
     provenance = _run_provenance(config)
+    provenance["effective_hamiltonian"] = effective_hamiltonian
     (config.output / "provenance.json").write_text(json.dumps(provenance, indent=2) + "\n")
     model = AlloyPaiNN(
         features=config.features,
@@ -588,6 +630,7 @@ def train_nicr(config: NiCrTrainConfig) -> list[dict]:
     oracle = TorchEAM(
         config.potential,
         species_indices=(0, 2),
+        cutoff=config.target_cutoff,
     ).to(device)
     prior = _prior(config)
     reference = _reference(config, device)
@@ -740,6 +783,18 @@ def train_nicr(config: NiCrTrainConfig) -> list[dict]:
             checkpoint_tmp,
         )
         checkpoint_tmp.replace(checkpoint_path)
+        if outer + 1 in DIAGNOSTIC_ROUNDS:
+            diagnostic_dir = config.output / "diagnostic_checkpoints"
+            diagnostic_dir.mkdir(exist_ok=True)
+            torch.save(
+                {
+                    "model": model.state_dict(),
+                    "round": outer + 1,
+                    "config": provenance["resolved_config"],
+                    "provenance": provenance,
+                },
+                diagnostic_dir / f"round_{outer + 1:03d}.pt",
+            )
         with (config.output / "metrics.jsonl").open("a") as handle:
             handle.write(json.dumps(metrics) + "\n")
         print(json.dumps(metrics), flush=True)

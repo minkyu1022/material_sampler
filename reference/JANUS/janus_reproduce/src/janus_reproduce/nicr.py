@@ -122,4 +122,8 @@ def substitution_energies(
     alternatives = oracle.all_site_energies(species, fractional, log_volume)
     delta = alternatives - current[:, None, None]
     batch = len(species)
-    return delta[..., 1][species.eq(0)].reshape(batch, -1), delta[..., 0][species.eq(1)].reshape(batch, -1)
+    n_cr = int(species[0].eq(1).sum())
+    return (
+        delta[..., 1][species.eq(0)].reshape(batch, species.shape[1] - n_cr),
+        delta[..., 0][species.eq(1)].reshape(batch, n_cr),
+    )

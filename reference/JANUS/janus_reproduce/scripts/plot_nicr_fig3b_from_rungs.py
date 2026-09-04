@@ -16,7 +16,11 @@ Ts=[600,750,900,1050,1200,1350,1500]
 
 def load(ph,T,N):
  rows=[json.loads((ROOT/ph/f'T{T}_n{n}.json').read_text()) for n in range(N+1)]
- x=np.arange(N+1)/N; g=-KB_EV*T*np.array([r['log_xi'] for r in rows])/N
+ bar=ROOT/ph/f'T{T}_bar.json'
+ if bar.exists():
+  result=json.loads(bar.read_text()); x=np.asarray(result['x_cr']); g=np.asarray(result['absolute_free_energy_eV'])/N
+ else:
+  x=np.arange(N+1)/N; g=-KB_EV*T*np.array([r['log_xi'] for r in rows])/N
  return x,g,rows
 
 def aligned(T):
@@ -68,8 +72,9 @@ for r in range(2):
  axes[r][0].plot((1-.015,1+.015),(-.015,+.015),transform=axes[r][0].transAxes,color='.5',clip_on=False)
  axes[r][1].plot((-.015,+.015),(-.015,+.015),transform=axes[r][1].transAxes,color='.5',clip_on=False)
 for ax in sum(axes,[]): ax.tick_params(labelsize=12); ax.spines[['top','right']].set_visible(False)
-fig.suptitle('Existing checkpoints — path-weight estimate (low ESS)',fontsize=12,color='crimson')
-fig.savefig(OUT/'fig3b_existing_models.png',dpi=220,bbox_inches='tight')
-summary={'temperatures':Ts,'fcc_boundary':left,'bcc_boundary':right,'warning':'Diagnostic: condition-wise ESS is near 1; do not treat as converged free energy.'}
-(OUT/'fig3b_existing_models.json').write_text(json.dumps(summary,indent=2))
-print(OUT/'fig3b_existing_models.png')
+bar_mode=all((ROOT/ph/f'T{T}_bar.json').exists() for ph in ('fcc','bcc') for T in Ts)
+fig.suptitle('JANUS weighted-BAR reproduction' if bar_mode else 'Path-weight diagnostic',fontsize=12,color='black' if bar_mode else 'crimson')
+fig.savefig(OUT/'fig3b.png',dpi=220,bbox_inches='tight')
+summary={'temperatures':Ts,'fcc_boundary':left,'bcc_boundary':right,'estimator':'weighted BAR' if bar_mode else 'direct path-weight log partition'}
+(OUT/'fig3b.json').write_text(json.dumps(summary,indent=2))
+print(OUT/'fig3b.png')

@@ -1,3 +1,5 @@
+import hashlib
+import json
 import numpy as np
 import pytest
 import torch
@@ -13,8 +15,43 @@ from janus_reproduce.nicr import (
     substitution_energies,
 )
 from janus_reproduce.torch_eam import TorchEAM
+from janus_reproduce.nicr_train import NiCrTrainConfig, effective_hamiltonian_manifest
 
 NICR_POTENTIAL = "potentials/ni_co_cr/Ni-Co-Cr_v1.eam.fs"
+
+
+def test_candidate_hamiltonian_gate_rejects_mixed_prior(tmp_path):
+    potential = tmp_path / "potential"
+    potential.write_bytes(b"candidate")
+    prior = tmp_path / "prior.json"
+    prior.write_text(json.dumps({
+        "potential_sha256": hashlib.sha256(potential.read_bytes()).hexdigest(),
+        "target_cutoff": 6.0,
+        "cutoff_convention": "provisional_abrupt_header",
+    }))
+    config = NiCrTrainConfig("fcc", potential, prior, tmp_path / "out", target_cutoff=5.0)
+    with pytest.raises(ValueError, match="prior Hamiltonian mismatch"):
+        effective_hamiltonian_manifest(config)
+
+
+def test_candidate_hamiltonian_manifest_covers_every_dependent_component(tmp_path):
+    potential = tmp_path / "potential"
+    potential.write_bytes(b"candidate")
+    expected = {
+        "potential_sha256": hashlib.sha256(potential.read_bytes()).hexdigest(),
+        "target_cutoff": 5.3,
+        "cutoff_convention": "provisional_abrupt_header",
+    }
+    prior = tmp_path / "prior.json"
+    prior.write_text(json.dumps(expected))
+    config = NiCrTrainConfig("bcc", potential, prior, tmp_path / "out", target_cutoff=5.3)
+    manifest = effective_hamiltonian_manifest(config)
+    assert manifest["graph_cutoff"] == 5.3
+    for key in (
+        "volume_prior_hamiltonian", "displacement_prior_hamiltonian",
+        "replay_hamiltonian", "path_weight_hamiltonian",
+    ):
+        assert manifest[key] == expected
 
 
 @pytest.mark.parametrize("phase,n_atoms", [("fcc", 108), ("bcc", 128)])
@@ -68,6 +105,18 @@ def test_fixed_composition_substitution_energies_feed_canonical_bar():
     _, reverse = substitution_energies(oracle, *samples[1])
     result = canonical_ladder_bar(forward, reverse, 1.0, 108, 3)
     assert np.isfinite(result["delta_beta_g"])
+
+
+@pytest.mark.parametrize("n_cr", [0, 108])
+def test_substitution_energies_support_pure_endpoint_rungs(n_cr):
+    oracle = TorchEAM(NICR_POTENTIAL, species_indices=(0, 2))
+    atoms = build_nicr("fcc", n_cr, lattice_constant=3.55, seed=2)
+    species = torch.tensor(np.asarray(atoms.numbers == 24), dtype=torch.long)[None]
+    fractional = torch.tensor(atoms.get_scaled_positions(), dtype=torch.float64)[None]
+    log_volume = torch.tensor([np.log(atoms.get_volume())], dtype=torch.float64)
+    forward, reverse = substitution_energies(oracle, species, fractional, log_volume)
+    assert forward.shape == (1, 108 - n_cr)
+    assert reverse.shape == (1, n_cr)
 
 
 def test_provisional_reveal_terminates_at_exact_requested_composition():

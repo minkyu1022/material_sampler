@@ -4,7 +4,7 @@
     "phase": "bcc",
     "potential": "potentials/ni_co_cr/Ni-Co-Cr_v1.eam.fs",
     "prior": "outputs/nicr_calibration_candidate/bcc_prior.json",
-    "output": "outputs/nicr_janus_bcc_candidate_final",
+    "output": "outputs/nicr_janus_bcc_candidate_diagnostic",
     "target_cutoff": 5.3,
     "cutoff_convention": "provisional_abrupt_header",
     "resume": false,
@@ -13,6 +13,7 @@
     "temperature_values": [],
     "temperature_min": 600.0,
     "temperature_max": 1500.0,
-    "diffusion_scale": 0.5
+    "diffusion_scale": 0.5,
+    "rounds": 24
   }
 }

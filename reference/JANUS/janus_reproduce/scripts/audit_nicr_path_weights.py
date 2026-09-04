@@ -11,7 +11,14 @@ import torch
 
 from janus_reproduce.alloy_model import AlloyPaiNN
 from janus_reproduce.free_energy import path_weight_estimates
-from janus_reproduce.nicr_train import NiCrTrainConfig, _prior, _reference, rollout_nicr
+from janus_reproduce.nicr_train import (
+    NiCrTrainConfig,
+    _prior,
+    _reference,
+    effective_hamiltonian_manifest,
+    resolved_config,
+    rollout_nicr,
+)
 from janus_reproduce.torch_eam import TorchEAM
 
 
@@ -27,6 +34,7 @@ def main() -> None:
     parser.add_argument("--save-samples", action="store_true")
     args = parser.parse_args()
     config = NiCrTrainConfig.from_json(args.config)
+    hamiltonian = effective_hamiltonian_manifest(config)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = AlloyPaiNN(
         features=config.features,
@@ -41,12 +49,20 @@ def main() -> None:
         condition_scale=1.0,
     ).to(device)
     checkpoint = torch.load(config.output / "checkpoint.pt", map_location=device, weights_only=False)
+    if checkpoint.get("config") != resolved_config(config):
+        raise ValueError("checkpoint config does not match the requested candidate config")
+    if checkpoint.get("provenance", {}).get("effective_hamiltonian") != hamiltonian:
+        raise ValueError("checkpoint Hamiltonian provenance mismatch")
     model.load_state_dict(checkpoint["model"])
     model.eval()
     generator = torch.Generator(device=device).manual_seed(
         config.seed + 1 if args.seed is None else args.seed
     )
-    oracle = TorchEAM(config.potential, species_indices=(0, 2)).to(device)
+    oracle = TorchEAM(
+        config.potential,
+        species_indices=(0, 2),
+        cutoff=config.target_cutoff,
+    ).to(device)
     chunks = []
     for start in range(0, args.samples, args.batch_size):
         count = min(args.batch_size, args.samples - start)
