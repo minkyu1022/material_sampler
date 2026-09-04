@@ -28,7 +28,7 @@ restart_relaxation() {
 }
 
 while true; do
-  sleep 60
+  sleep 30
   SNAP=$(snapshot)
   DONE=$(printf '%s' "$SNAP" | field converged)
   BAD=$(printf '%s' "$SNAP" | field bad)
@@ -78,7 +78,7 @@ while true; do
     fi
     break
   fi
-  if (( NOW - LAST_REPORT >= 1800 )); then
+  if (( NOW - LAST_REPORT >= 1740 )); then
     if (( DONE > 0 )); then
       ETA=$(TZ=America/Toronto date -d "@$ETA_EPOCH" '+%Y-%m-%d %H:%M %Z')
     else
