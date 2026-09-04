@@ -3,7 +3,7 @@
 from __future__ import annotations
 import argparse, hashlib, json
 from collections import Counter
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 import numpy as np
 import torch
@@ -55,15 +55,24 @@ def main() -> None:
     parser.add_argument("--source", type=Path, required=True)
     parser.add_argument("--relaxed", type=Path, required=True)
     parser.add_argument("--processed", type=Path, required=True)
+    parser.add_argument("--balanced", type=Path)
     parser.add_argument("--workers", type=int, default=32)
+    parser.add_argument("--subset-manifest", type=Path)
     args = parser.parse_args()
 
-    expected_keys = set()
-    expected_compositions = Counter()
-    for path in sorted(args.source.glob("*.npz")):
-        with np.load(path) as data:
-            expected_keys.update((path.stem, frame) for frame in range(len(data["fractional_positions"])))
-            expected_compositions.update(data["species"].sum(axis=1).astype(int).tolist())
+    if args.subset_manifest:
+        subset = json.loads(args.subset_manifest.read_text())
+        expected_keys = {(item["chain"], int(item["frame"])) for item in subset["items"]}
+        expected_compositions = Counter(int(item["n_cu"]) for item in subset["items"])
+        if len(expected_keys) != subset["count"]:
+            raise ValueError("subset manifest contains duplicate or inconsistent items")
+    else:
+        expected_keys = set()
+        expected_compositions = Counter()
+        for path in sorted(args.source.glob("*.npz")):
+            with np.load(path) as data:
+                expected_keys.update((path.stem, frame) for frame in range(len(data["fractional_positions"])))
+                expected_compositions.update(data["species"].sum(axis=1).astype(int).tolist())
 
     records = {}
     malformed, duplicate_records = [], []
@@ -108,7 +117,9 @@ def main() -> None:
             assert item["n_cu"] == int((item["A0"] == 29).sum())
         except Exception as exc:
             schema_errors.append(f"item {index}: {type(exc).__name__}: {exc}")
-    with ProcessPoolExecutor(max_workers=args.workers) as pool:
+    # ASE reads are I/O-heavy; threads also avoid copying 136k torch tensors through
+    # multiprocessing shared memory.
+    with ThreadPoolExecutor(max_workers=args.workers) as pool:
         source_errors = [
             error for error in pool.map(
                 validate_item_source,
@@ -122,6 +133,22 @@ def main() -> None:
     failures_path = args.processed.with_suffix(".failures.json")
     processed = json.loads(processed_manifest_path.read_text())
     failures = json.loads(failures_path.read_text())
+    balanced_checks = {}
+    if args.balanced:
+        balanced = torch.load(args.balanced, weights_only=False)
+        balanced_manifest = json.loads(args.balanced.with_suffix(".manifest.json").read_text())
+        balanced_ids = [item["mp_id"] for item in balanced]
+        balanced_counts = Counter(int(item["n_cu"]) for item in balanced)
+        balanced_checks = {
+            "balanced_view_is_master_subset": set(balanced_ids) <= item_ids,
+            "balanced_view_has_unique_ids": len(balanced_ids) == len(set(balanced_ids)),
+            "balanced_view_respects_cap": max(balanced_counts.values()) <= balanced_manifest["cap_per_n_cu"],
+            "balanced_view_keeps_all_compositions": set(balanced_counts) == {item["n_cu"] for item in items},
+            "balanced_view_manifest_matches": balanced_manifest["selected_items"] == len(balanced)
+            and balanced_manifest["master_items"] == len(items)
+            and balanced_manifest["source_sha256"] == sha256(args.processed)
+            and balanced_manifest["selected_counts"] == {str(k): v for k, v in sorted(balanced_counts.items())},
+        }
     split = processed.get("crystalite_split") or {}
     split_root = Path(split.get("root", "/missing"))
     train_path = split_root / "processed/mp20_tokens_train_nmax108.pt"
@@ -207,10 +234,13 @@ def main() -> None:
         "provenance_present": provenance_path.exists() and bool(provenance.get("locks")) and bool(provenance.get("source")),
         "provenance_hashes_match": provenance_hashes_match,
         "source_hashes_match": source_hashes_match,
+        "accepted_subset_manifest_matches": not args.subset_manifest
+        or subset["count"] == len(expected_keys) == len(converged),
         "recorded_command_matches": provenance.get("command") == (args.relaxed / "command.txt").read_text().strip(),
         "provenance_relaxation_matches_run": provenance.get("relaxation") == run,
         "no_activation_checkpointing_or_early_8ddp_main_training": provenance.get("forbidden_activation_checkpointing_used") is False
         and provenance.get("eight_ddp_main_training_started") is False,
+        **balanced_checks,
     }
     report = {
         "expected_structures": len(expected_keys), "recorded": len(records),
@@ -257,6 +287,12 @@ def main() -> None:
         "validation_report_sha256": sha256(destination),
         "validation_markdown_sha256": sha256(markdown_path),
     })
+    if args.balanced:
+        provenance["final_artifacts"]["balanced_training_view"] = {
+            "path": str(args.balanced.resolve()), "bytes": args.balanced.stat().st_size,
+            "sha256": sha256(args.balanced),
+            "manifest_sha256": sha256(args.balanced.with_suffix(".manifest.json")),
+        }
     provenance["validation_passed"] = report["passed"]
     provenance_path.write_text(json.dumps(provenance, indent=2) + "\n")
     print(json.dumps(report, indent=2))

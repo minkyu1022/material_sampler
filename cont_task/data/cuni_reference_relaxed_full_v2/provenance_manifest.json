@@ -1017,12 +1017,16 @@
   "code_sha256": {
     "cont_task/data/relax_cuni.py": "87d744fddaf04dbfd460509d5a03673889f83f069c479b37b237853b5c4c8eea",
     "cont_task/data/relax_cuni_dataset.py": "6376bcc61c415eead7639c299676c2bac9cd1f8a81860d902feb6db41807eb26",
-    "cont_task/data/build_cuni_crystalite_dataset.py": "7c0168202a4032eea6889e7771edc0ddd60ec51f8e063cc6174c2f526bbb55b7",
-    "cont_task/data/validate_cuni_phase1.py": "f86abd0763b3418a49d56f685474f3f8ba0afa105e4785e5a50a8ebc2c6a5b87",
+    "cont_task/data/build_cuni_crystalite_dataset.py": "c131f7ead2b8982e80cfae45cfce62f8e11fe96d0864e785768b8eaa5c81a828",
+    "cont_task/data/validate_cuni_phase1.py": "5a69cbddd604006079759deab1073f2187a1a9d1a9d35480e97b3fd7b58d50c0",
     "cont_task/data/cuni_progress.py": "797ca2e85b37883e5857ab3d41854d8860e4ad86c6c57a70a1e8fa9be9c7a0c3",
     "cont_task/data/monitor_cuni_relax.sh": "74ab9d4694f9a291b4fa569540a79365647eda684ff463848691d52623786307",
     "cont_task/data/write_cuni_provenance.py": "7228bdc8d1179a6270eca5c1081dd079746c192b415abccf0d0b0a2224f74609",
-    "cont_task/data/PHASE1_RUNBOOK.md": "4b5a034262b0b389accf1bad7581c3c2a76e5a5bb2fdba507fd4c2b59bd9c7f1"
+    "cont_task/data/PHASE1_RUNBOOK.md": "98ee37ab9a8e6a7af36a36cd592fbfbdd39eec73f03ac4eac17e3e865b41eafb",
+    "cont_task/data/audit_cuni_subset_diversity.py": "a3a31579fe38b6aee6ddfefd4b335114a07ed11ae7225b10a287495988145f00",
+    "cont_task/data/freeze_cuni_subset.py": "d1242d323eb47d348b747488f04df6e8e7e9c27edb60df25d47356047db40dd2",
+    "cont_task/data/build_cuni_balanced_view.py": "7af3a088715316ab68bfa12fcdfa9ad98a815244522ed8b3c32a102f137854ab",
+    "cont_task/data/monitor_cuni_subset_postprocess.sh": "033fa0d78e40d53bdd5c14c166a9cc63f37c33165882cf56ef7e7bf9cd654408"
   },
   "locks": {
     "reference/JANUS/janus_reproduce/uv.lock": "770ab5d1c909a468da1cddb32060d1d36335f25b7eb740a4af4c2fc8f94a602d",
@@ -1041,5 +1045,53 @@
     "cont_task/data/pilot/N108_T1200_mu089_w0_f0 (old inverted species mapping)",
     "cont_task/data/benchmark_8x1 (old inverted species mapping)",
     "cont_task/data/benchmark_8x1_singlethread_v2 (old inverted species mapping)"
-  ]
+  ],
+  "accepted_early_stop_subset": {
+    "count": 136826,
+    "user_authorized": true,
+    "freeze_manifest": "/home/spml_minkyu_kim/joint_sampler/cont_task/data/cuni_reference_relaxed_full_v2/frozen_subset_manifest.json",
+    "freeze_manifest_sha256": "ff6c4140262ee3bfa8e900578f74698e8c5506cbce29831f29c82ac4d04ae43f",
+    "diversity_audit": "/home/spml_minkyu_kim/joint_sampler/cont_task/data/cuni_reference_relaxed_full_v2/paused_subset_diversity_audit.json",
+    "diversity_audit_sha256": "269da6ccdf38ba539bb318c72b5be921729c08375931617051294bbc19ad5cb4"
+  },
+  "final_artifacts": {
+    "raw": {
+      "count": 136826,
+      "bytes": 816770397
+    },
+    "relaxed": {
+      "count": 136826,
+      "bytes": 1624445119
+    },
+    "cif": {
+      "count": 136826,
+      "bytes": 1405666796
+    },
+    "processed_pt": {
+      "path": "/home/spml_minkyu_kim/joint_sampler/cont_task/data/processed/cuni_tokens.pt",
+      "bytes": 494815431,
+      "sha256": "c873f61ddb425b7312b5165a59159f1e8d5e4f8b578e328fca7f7e38e3d79bd3"
+    },
+    "processed_manifest_sha256": "e2fb8a3e6078504e7ee432122a458e76815943eb1c88fe562a7343113f426017",
+    "failure_list_sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+    "crystalite_train_pt": {
+      "path": "/home/spml_minkyu_kim/joint_sampler/cont_task/data/crystalite_cuni/processed/mp20_tokens_train_nmax108.pt",
+      "bytes": 485478787,
+      "sha256": "777d238d2da7e7d7a1817388f28ec07ac93e304b9582aee54c893abb80af8283"
+    },
+    "crystalite_val_pt": {
+      "path": "/home/spml_minkyu_kim/joint_sampler/cont_task/data/crystalite_cuni/processed/mp20_tokens_val_nmax108.pt",
+      "bytes": 25167847,
+      "sha256": "e17b97a3d8cded355eb1e003ca372cd33c7390ff9b3733d0da890f470d18eb2c"
+    },
+    "validation_report_sha256": "7c57301c337c25eb8971745bd562868c7317d2ca73ea3b40ea40f9138f6c4d44",
+    "validation_markdown_sha256": "c5fc363725586eeac30bc84055fd09f7633287d245dadfc16b768a56b059b451",
+    "balanced_training_view": {
+      "path": "/home/spml_minkyu_kim/joint_sampler/cont_task/data/processed/cuni_tokens_balanced_cap1000.pt",
+      "bytes": 184995213,
+      "sha256": "87adbb269ad38c799ce1030ea3d338c9e19844a1b41cac1b149c4ebf301e689f",
+      "manifest_sha256": "c15c46092e33e3cb1c01d05b14259f8b8c69ca6ca18942600dae4319990f5dfa"
+    }
+  },
+  "validation_passed": true
 }

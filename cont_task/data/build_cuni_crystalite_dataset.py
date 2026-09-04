@@ -158,6 +158,10 @@ def convert(root: Path, output: Path, limit: int = 0, crystalite_root: Path | No
             group["fingerprints"].add(fingerprint)
             group["energies"].append(float(record["final_energy_eV"]))
             group["volumes"].append(float(record["final_volume_A3"]))
+            if len(items) % 1_000 == 0:
+                output.with_suffix(".progress.json").write_text(
+                    json.dumps({"processed": len(items), "failures": len(failures)}) + "\n"
+                )
         except Exception as exc:
             failures.append(
                 {"chain": chain.name, "frame": frame, "stage": "preprocessing", "error": f"{type(exc).__name__}: {exc}"}
