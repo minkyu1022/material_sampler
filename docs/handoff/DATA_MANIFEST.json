@@ -7,5 +7,33 @@
     "Dropbox is not configured on the source server yet.",
     "Every archive entry must contain relative paths, size, SHA256, and direct download URL after upload.",
     "Credentials are never stored in this file."
+  ],
+  "planned_archives": [
+    {
+      "name": "cuni_reference_mc.tar",
+      "contents": [
+        "reference/JANUS/janus_reproduce/outputs/cuni_reference_n108_full"
+      ],
+      "status": "ready_to_package"
+    },
+    {
+      "name": "cuni_phase1_relaxed.tar",
+      "contents": [
+        "cont_task/data/cuni_reference_relaxed_full_v2",
+        "cont_task/data/processed",
+        "cont_task/data/crystalite_cuni"
+      ],
+      "status": "wait_for_phase1_completion"
+    },
+    {
+      "name": "cuni_pretraining.tar",
+      "contents": [
+        "10k dataset",
+        "A/B/C final checkpoints",
+        "B diagnostics",
+        "regular-weight evaluations"
+      ],
+      "status": "wait_for_C_and_regular_evaluations"
+    }
   ]
 }

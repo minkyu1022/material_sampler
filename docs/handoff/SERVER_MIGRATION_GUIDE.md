@@ -16,9 +16,9 @@ Dropbox links and SHA256 checksums are recorded in `docs/handoff/DATA_MANIFEST.j
 Example:
 
 ```bash
-curl -L '<DROPBOX_DIRECT_DOWNLOAD_URL>' -o artifact.tar.zst
-sha256sum -c artifact.tar.zst.sha256
-tar --zstd -xf artifact.tar.zst
+curl -L '<DROPBOX_DIRECT_DOWNLOAD_URL>' -o artifact.tar
+sha256sum -c artifact.tar.sha256
+tar -xf artifact.tar
 ```
 
 Do not use an archive whose checksum does not match.
