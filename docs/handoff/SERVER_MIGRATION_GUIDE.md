@@ -18,6 +18,12 @@ The source-server Dropbox root is `dropbox:joint_sampler_dataset`. The uploaded 
 - Direct download: <https://www.dropbox.com/scl/fi/r1awslalal7jjofqyzpzh/cuni_reference_mc.tar?rlkey=atw6w045rpj6mwsq8jxi9fv7g&dl=1>
 - SHA256: `d1be29dad1c8d9d20e039a1fc68315352c9ebd883ee798a1e2a1efd1566584e2`
 
+Selected scientific and resume checkpoints (smoke checkpoints excluded):
+
+- Direct download: <https://www.dropbox.com/scl/fi/n70ka11iivr71zogb33pn/cuni_checkpoints_20260904.tar?rlkey=jnwuoqogcr72hxxzn3fyqcq89&dl=1>
+- SHA256: `f1389df62b7ab0a9e090e163274129366fcec147f7e519c16bf4dc8dcf2832d2`
+- The bundled C checkpoint is an explicitly labeled point-in-time resume snapshot. Add the final C checkpoint after its current run completes.
+
 Example:
 
 ```bash

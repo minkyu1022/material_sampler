@@ -15,6 +15,22 @@
       "local_path": "handoff_archives/cuni_reference_mc.tar",
       "dropbox_path": "dropbox:joint_sampler_dataset/2026-09-04/cuni_reference_mc.tar",
       "download_url": "https://www.dropbox.com/scl/fi/r1awslalal7jjofqyzpzh/cuni_reference_mc.tar?rlkey=atw6w045rpj6mwsq8jxi9fv7g&dl=1"
+    },
+    {
+      "name": "cuni_checkpoints_20260904.tar",
+      "contents": [
+        "reproduced Cu-Ni JANUS checkpoint and recentered checkpoint",
+        "completed pretraining A and B final checkpoints",
+        "point-in-time corrected Cartesian C resume checkpoint",
+        "checkpoint-level configs, metadata, and SHA256 manifest"
+      ],
+      "status": "uploaded_and_sha256_verified",
+      "notes": "Smoke and architecture-capacity checkpoints are excluded. C is a resume snapshot, not the final C checkpoint.",
+      "bytes": 3714211840,
+      "sha256": "f1389df62b7ab0a9e090e163274129366fcec147f7e519c16bf4dc8dcf2832d2",
+      "local_path": "handoff_archives/cuni_checkpoints_20260904.tar",
+      "dropbox_path": "dropbox:joint_sampler_dataset/2026-09-04/cuni_checkpoints_20260904.tar",
+      "download_url": "https://www.dropbox.com/scl/fi/n70ka11iivr71zogb33pn/cuni_checkpoints_20260904.tar?rlkey=jnwuoqogcr72hxxzn3fyqcq89&dl=1"
     }
   ],
   "notes": [
