@@ -35,6 +35,16 @@ def test_fingerprint_is_translation_invariant():
     assert MOD.structure_fingerprint(types, frac, cell) == MOD.structure_fingerprint(types.flip(0), frac[::-1].copy(), cell)
 
 
+def test_fingerprint_is_rotation_invariant_and_species_sensitive():
+    types = torch.tensor([28, 29, 28])
+    frac = np.array([[0.1, 0.2, 0.3], [0.7, 0.8, 0.9], [0.2, 0.75, 0.4]])
+    cell = np.diag([3.5, 4.0, 4.5])
+    rotation = np.array([[0.0, -1.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, 1.0]])
+    original = MOD.structure_fingerprint(types, frac, cell)
+    assert original == MOD.structure_fingerprint(types, frac, cell @ rotation)
+    assert original != MOD.structure_fingerprint(torch.tensor([29, 29, 28]), frac, cell)
+
+
 def test_singleton_composition_stays_in_train(tmp_path):
     def item(name, n_cu):
         return {"mp_id": name, "n_cu": n_cu}
