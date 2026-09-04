@@ -1,3 +1,5 @@
+import math
+
 import pytest
 import torch
 
@@ -80,3 +82,14 @@ def test_bridge_samples_the_discrete_gaussian_winding_posterior():
     expected = torch.softmax(-0.5 * (0.4 + offsets).square() / 0.5, dim=0)
     empirical = torch.stack([(winding == offset).double().mean() for offset in offsets])
     assert torch.allclose(empirical, expected, atol=0.006, rtol=0)
+
+
+def test_endpoint_mean_is_not_a_sufficient_statistic_for_wrapped_score():
+    x = torch.tensor(0.02, dtype=torch.float64)
+    endpoints = torch.tensor([0.92, 0.25], dtype=torch.float64)
+    weights = torch.tensor([0.3, 0.7], dtype=torch.float64)
+    expected_score = (weights * wrapped_normal_score(x, endpoints, 0.12**2)).sum()
+    circular_moment = (weights * torch.exp(2j * math.pi * endpoints)).sum()
+    circular_mean = torch.remainder(torch.angle(circular_moment) / (2 * math.pi), 1.0)
+    plug_in_score = wrapped_normal_score(x, circular_mean, 0.12**2)
+    assert abs(expected_score - plug_in_score).item() > 1.0
