@@ -72,3 +72,46 @@ def wrapped_normal_score(
     weights = torch.softmax(log_terms, dim=-1)
     variance = torch.broadcast_tensors(value, mean, variance)[2]
     return (weights * (-lifted / variance.unsqueeze(-1))).sum(dim=-1)
+
+
+def sample_wrapped_brownian_bridge(
+    source: Tensor,
+    target: Tensor,
+    variance_t: Tensor | float,
+    variance_total: Tensor | float,
+    *,
+    generator: torch.Generator | None = None,
+    tail_tolerance: float = 1e-12,
+    return_winding: bool = False,
+) -> Tensor | tuple[Tensor, Tensor]:
+    """Sample a flat-torus Brownian bridge at cumulative variance ``variance_t``.
+
+    The endpoint winding number is sampled from its exact discrete Gaussian
+    posterior before sampling the Euclidean bridge on that lift.
+    """
+    if source.shape != target.shape:
+        raise ValueError("source and target must have identical shapes")
+    total = torch.as_tensor(variance_total, device=source.device, dtype=source.dtype)
+    current = torch.as_tensor(variance_t, device=source.device, dtype=source.dtype)
+    source, target, current, total = torch.broadcast_tensors(source, target, current, total)
+    if torch.any(total <= 0) or not torch.isfinite(total).all():
+        raise ValueError("variance_total must be finite and positive")
+    if torch.any(current < 0) or torch.any(current > total) or not torch.isfinite(current).all():
+        raise ValueError("variance_t must satisfy 0 <= variance_t <= variance_total")
+
+    delta = torus_delta(target, source)
+    offsets = _image_offsets(total, tail_tolerance)
+    lifted_endpoints = delta.unsqueeze(-1) + offsets
+    logits = -0.5 * lifted_endpoints.square() / total.unsqueeze(-1)
+    sampled = torch.multinomial(
+        torch.softmax(logits, dim=-1).reshape(-1, offsets.numel()),
+        1,
+        generator=generator,
+    ).reshape(source.shape)
+    winding = offsets[sampled]
+    fraction = current / total
+    mean = source + fraction * (delta + winding)
+    conditional_variance = current * (total - current) / total
+    noise = torch.randn(source.shape, device=source.device, dtype=source.dtype, generator=generator)
+    sample = torch.remainder(mean + conditional_variance.sqrt() * noise, 1.0)
+    return (sample, winding) if return_winding else sample

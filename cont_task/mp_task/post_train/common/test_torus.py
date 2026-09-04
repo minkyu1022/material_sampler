@@ -1,7 +1,13 @@
 import pytest
 import torch
 
-from torus import torus_delta, torus_interpolate, wrapped_normal_log_prob, wrapped_normal_score
+from torus import (
+    sample_wrapped_brownian_bridge,
+    torus_delta,
+    torus_interpolate,
+    wrapped_normal_log_prob,
+    wrapped_normal_score,
+)
 
 
 def test_delta_and_interpolation_cross_boundary_by_shortest_path():
@@ -39,3 +45,38 @@ def test_small_variance_matches_euclidean_score_away_from_boundary():
 def test_invalid_variance_is_rejected():
     with pytest.raises(ValueError):
         wrapped_normal_log_prob(torch.tensor([0.2]), 0.0, 0.0)
+
+
+def test_bridge_has_exact_torus_endpoints():
+    source = torch.tensor([0.9, 0.2], dtype=torch.float64)
+    target = torch.tensor([0.1, 0.7], dtype=torch.float64)
+    assert torch.allclose(sample_wrapped_brownian_bridge(source, target, 0.0, 0.3), source)
+    assert torch.allclose(sample_wrapped_brownian_bridge(source, target, 0.3, 0.3), target)
+
+
+def test_bridge_is_periodic_in_both_endpoints():
+    generator_a = torch.Generator().manual_seed(7)
+    generator_b = torch.Generator().manual_seed(7)
+    source = torch.tensor([0.93, 0.2], dtype=torch.float64)
+    target = torch.tensor([0.07, 0.8], dtype=torch.float64)
+    a = sample_wrapped_brownian_bridge(source, target, 0.08, 0.2, generator=generator_a)
+    b = sample_wrapped_brownian_bridge(source + 2, target - 3, 0.08, 0.2, generator=generator_b)
+    assert torch.allclose(a, b, atol=1e-12, rtol=0)
+
+
+def test_bridge_samples_the_discrete_gaussian_winding_posterior():
+    count = 50000
+    source = torch.zeros(count, dtype=torch.float64)
+    target = torch.full_like(source, 0.4)
+    _, winding = sample_wrapped_brownian_bridge(
+        source,
+        target,
+        0.2,
+        0.5,
+        generator=torch.Generator().manual_seed(19),
+        return_winding=True,
+    )
+    offsets = torch.arange(-4, 5, dtype=torch.float64)
+    expected = torch.softmax(-0.5 * (0.4 + offsets).square() / 0.5, dim=0)
+    empirical = torch.stack([(winding == offset).double().mean() for offset in offsets])
+    assert torch.allclose(empirical, expected, atol=0.006, rtol=0)

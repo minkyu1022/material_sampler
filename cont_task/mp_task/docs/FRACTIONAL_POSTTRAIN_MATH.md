@@ -69,11 +69,18 @@ Implemented in `post_train/common/torus.py`:
 - shortest torus displacement and deterministic interpolation;
 - analytic wrapped-normal log density;
 - analytic wrapped-normal score;
+- winding-aware stochastic Brownian-bridge sampling;
 - periodicity, normalization, boundary, and autograd checks.
+
+Implemented in `post_train/common/geometry.py`:
+
+- Cartesian force to fractional-coordinate target-score conversion;
+- padded center-of-mass/translation-zero-mode projection;
+- an autograd chain-rule check using a non-orthogonal cell.
 
 Still required before an end-to-end claim:
 
-- winding-aware stochastic bridge and transition sampler;
+- rollout transition sampler and transition log-density integration;
 - one-head BMS adapter with separate velocity/generalized-score losses;
 - UMA force/stress target adapters and cell Jacobian;
 - proximal-CE adapter using the same torus transition law;
