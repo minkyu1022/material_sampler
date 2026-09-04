@@ -1,0 +1,29 @@
+{
+  "material_id": "mp-39712",
+  "num_atoms": 20,
+  "checkpoint_step": 1400000,
+  "parameters": 270047720,
+  "lattice_repr": "ltri",
+  "coordinate_repr": "fractional",
+  "load_seconds": 4.840437173843384,
+  "output_shapes": {
+    "type_logits": [
+      1,
+      20,
+      95
+    ],
+    "coord_vel": [
+      1,
+      20,
+      3
+    ],
+    "lattice_vel": [
+      1,
+      6
+    ]
+  },
+  "all_outputs_finite": true,
+  "peak_forward_memory_bytes": 1630448640,
+  "optimizer_created": false,
+  "backward_called": false
+}
