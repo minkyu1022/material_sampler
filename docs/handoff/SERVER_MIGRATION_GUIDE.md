@@ -13,6 +13,11 @@ Install OMX/Discord only if required by the destination runtime. Never copy a co
 
 Dropbox links and SHA256 checksums are recorded in `docs/handoff/DATA_MANIFEST.json` after upload. Download each archive, verify its SHA256, then extract from the repository root while preserving relative paths.
 
+The source-server Dropbox root is `dropbox:joint_sampler_dataset`. The uploaded Cu–Ni reference MC archive is:
+
+- Direct download: <https://www.dropbox.com/scl/fi/r1awslalal7jjofqyzpzh/cuni_reference_mc.tar?rlkey=atw6w045rpj6mwsq8jxi9fv7g&dl=1>
+- SHA256: `d1be29dad1c8d9d20e039a1fc68315352c9ebd883ee798a1e2a1efd1566584e2`
+
 Example:
 
 ```bash

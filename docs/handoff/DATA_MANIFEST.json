@@ -1,25 +1,28 @@
 {
   "schema": "material-sampler-data-manifest-v1",
   "generated_at": "2026-09-04",
-  "dropbox_status": "pending_authentication",
-  "archives": [],
-  "notes": [
-    "Dropbox is not configured on the source server yet.",
-    "Every archive entry must contain relative paths, size, SHA256, and direct download URL after upload.",
-    "Credentials are never stored in this file."
-  ],
-  "planned_archives": [
+  "dropbox_status": "configured",
+  "dropbox_root": "dropbox:joint_sampler_dataset",
+  "archives": [
     {
       "name": "cuni_reference_mc.tar",
       "contents": [
         "reference/JANUS/janus_reproduce/outputs/cuni_reference_n108_full"
       ],
-      "status": "packaged_waiting_for_dropbox",
+      "status": "uploaded_and_sha256_verified",
       "bytes": 602572800,
       "sha256": "d1be29dad1c8d9d20e039a1fc68315352c9ebd883ee798a1e2a1efd1566584e2",
       "local_path": "handoff_archives/cuni_reference_mc.tar",
-      "download_url": null
-    },
+      "dropbox_path": "dropbox:joint_sampler_dataset/2026-09-04/cuni_reference_mc.tar",
+      "download_url": "https://www.dropbox.com/scl/fi/r1awslalal7jjofqyzpzh/cuni_reference_mc.tar?rlkey=atw6w045rpj6mwsq8jxi9fv7g&dl=1"
+    }
+  ],
+  "notes": [
+    "The Dropbox remote is configured as dropbox: and transfer artifacts live below joint_sampler_dataset/.",
+    "Every completed archive entry contains relative paths, size, SHA256, and a direct download URL.",
+    "Credentials are never stored in this file."
+  ],
+  "planned_archives": [
     {
       "name": "cuni_phase1_relaxed.tar",
       "contents": [
