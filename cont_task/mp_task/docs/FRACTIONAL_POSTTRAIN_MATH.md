@@ -62,6 +62,35 @@ rule from stress/virial to the chosen six lower-triangular variables, positivity
 the diagonal representation, and the target-measure Jacobian. Those pieces are not
 implemented by the torus module and must pass independent finite-difference tests.
 
+## Exactness caveat for one clean-endpoint head
+
+In Euclidean Gaussian corruption, the conditional score is affine in the clean
+endpoint. Consequently, replacing the endpoint by `E[x1 | x_t]` gives Tweedie's
+identity and one endpoint prediction can parameterize both velocity and score.
+
+For a wrapped Gaussian, the conditional score is a nonlinear ratio of integer-image
+sums. In general,
+
+\[
+E[s_{\rm wrap}(x_t,x_1)\mid x_t]
+\ne s_{\rm wrap}(x_t,E[x_1\mid x_t]).
+\]
+
+Therefore an ordinary point-valued clean-endpoint expectation is not, by itself, a
+sufficient statistic for the exact torus score. Reusing one head for both losses is
+exact only after making one of these choices explicit:
+
+1. augment the state with a Euclidean lift/winding variable and train the endpoint
+   in that lifted space, where the Gaussian score is affine;
+2. let the head represent enough of the endpoint/winding posterior rather than only
+   its point expectation; or
+3. use a separate score output.
+
+Using the nearest image and applying an Euclidean Tweedie formula is a useful
+small-noise approximation, but it must be labeled as such. The mainline will not
+silently use that approximation. This decision must be resolved before wiring the
+one-head BMS loss.
+
 ## Current implementation status
 
 Implemented in `post_train/common/torus.py`:
